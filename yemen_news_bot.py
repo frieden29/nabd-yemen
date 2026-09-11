@@ -1,1 +1,356 @@
+# -*- coding: utf-8 -*-
 
+import json
+import re
+import time
+from datetime import datetime, timezone
+from html import unescape
+
+import feedparser
+import requests
+from bs4 import BeautifulSoup
+
+
+# =========================================================
+# الإعدادات
+# =========================================================
+
+OUTPUT_FILE = "news.json"
+
+MAX_PER_SOURCE = 20
+
+REQUEST_TIMEOUT = 12
+
+
+SOURCES = [
+
+    # 🇾🇪 اليمن
+    {
+        "name": "سبتمبر نت",
+        "rss": "https://www.26sepnews.net/feed/",
+    },
+    {
+        "name": "المصدر أونلاين",
+        "rss": "https://almasdaronline.com/rss",
+    },
+    {
+        "name": "المشهد اليمني",
+        "rss": "https://www.almashhad.news/feed",
+    },
+    {
+        "name": "عدن الغد",
+        "rss": "https://www.adngad.net/feed",
+    },
+    {
+        "name": "الصحوة نت",
+        "rss": "https://www.alsahwa-yemen.net/rss",
+    },
+    {
+        "name": "قناة بلقيس",
+        "rss": "https://belqees.net/rss",
+    },
+    {
+        "name": "وكالة سبأ",
+        "rss": "https://www.sabanew.net/rss.php?lang=ar",
+    },
+
+    # 🌍 مصادر إضافية
+    {
+        "name": "BBC عربي",
+        "rss": "https://feeds.bbci.co.uk/arabic/rss.xml",
+    },
+
+]
+
+
+HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/140 Safari/537.36"
+    )
+}
+
+
+# =========================================================
+# أدوات مساعدة
+# =========================================================
+
+def clean_text(text):
+    if not text:
+        return ""
+
+    text = unescape(text)
+
+    soup = BeautifulSoup(text, "html.parser")
+
+    text = soup.get_text(" ", strip=True)
+
+    text = re.sub(r"\s+", " ", text)
+
+    return text.strip()
+
+
+def extract_image(entry):
+    candidates = []
+
+    if hasattr(entry, "media_content"):
+        for item in entry.media_content:
+            url = item.get("url")
+            if url:
+                candidates.append(url)
+
+    if hasattr(entry, "media_thumbnail"):
+        for item in entry.media_thumbnail:
+            url = item.get("url")
+            if url:
+                candidates.append(url)
+
+    if hasattr(entry, "links"):
+        for item in entry.links:
+            href = item.get("href")
+            typ = item.get("type", "")
+
+            if href and typ.startswith("image/"):
+                candidates.append(href)
+
+    if candidates:
+        return candidates[0]
+
+    summary = getattr(entry, "summary", "")
+
+    if summary:
+        soup = BeautifulSoup(summary, "html.parser")
+
+        img = soup.find("img")
+
+        if img and img.get("src"):
+            return img["src"]
+
+    return ""
+
+
+def parse_date(entry):
+    possible = [
+        "published_parsed",
+        "updated_parsed",
+    ]
+
+    for attr in possible:
+        value = getattr(entry, attr, None)
+
+        if value:
+            try:
+                dt = datetime(
+                    *value[:6],
+                    tzinfo=timezone.utc
+                )
+
+                return dt.isoformat()
+            except Exception:
+                pass
+
+    return datetime.now(timezone.utc).isoformat()
+
+
+def normalize_link(link):
+    if not link:
+        return ""
+
+    return link.strip()
+
+
+# =========================================================
+# قراءة مصدر واحد
+# =========================================================
+
+def fetch_source(source):
+    name = source["name"]
+    rss = source["rss"]
+
+    print("=" * 70)
+    print(f"المصدر: {name}")
+    print(f"RSS: {rss}")
+    print("=" * 70)
+
+    try:
+        response = requests.get(
+            rss,
+            headers=HEADERS,
+            timeout=REQUEST_TIMEOUT,
+        )
+
+        response.raise_for_status()
+
+    except Exception as e:
+        print(f"❌ فشل الاتصال: {e}")
+        return []
+
+    feed = feedparser.parse(response.content)
+
+    items = []
+
+    for entry in feed.entries[:MAX_PER_SOURCE]:
+
+        title = clean_text(
+            getattr(entry, "title", "")
+        )
+
+        link = normalize_link(
+            getattr(entry, "link", "")
+        )
+
+        description = clean_text(
+            getattr(
+                entry,
+                "summary",
+                getattr(entry, "description", "")
+            )
+        )
+
+        image = extract_image(entry)
+
+        published_at = parse_date(entry)
+
+        if not title or not link:
+            continue
+
+        item = {
+            "title": title,
+            "source": name,
+            "link": link,
+            "image": image,
+            "description": description,
+            "published_at": published_at,
+            "views": 0,
+        }
+
+        items.append(item)
+
+    print(f"✅ تم استخراج {len(items)} خبراً")
+
+    return items
+
+
+# =========================================================
+# إزالة التكرار
+# =========================================================
+
+def remove_duplicates(news):
+    result = []
+
+    seen_links = set()
+    seen_titles = set()
+
+    for item in news:
+
+        link = item.get("link", "").strip()
+        title = item.get("title", "").strip().lower()
+
+        if link and link in seen_links:
+            continue
+
+        if title and title in seen_titles:
+            continue
+
+        if link:
+            seen_links.add(link)
+
+        if title:
+            seen_titles.add(title)
+
+        result.append(item)
+
+    return result
+
+
+# =========================================================
+# ترتيب الأخبار
+# =========================================================
+
+def sort_news(news):
+
+    def key(item):
+
+        value = item.get(
+            "published_at",
+            ""
+        )
+
+        try:
+            return datetime.fromisoformat(
+                value.replace("Z", "+00:00")
+            )
+        except Exception:
+            return datetime.min.replace(
+                tzinfo=timezone.utc
+            )
+
+    news.sort(
+        key=key,
+        reverse=True
+    )
+
+    return news
+
+
+# =========================================================
+# حفظ الملف
+# =========================================================
+
+def save_news(news):
+
+    with open(
+        OUTPUT_FILE,
+        "w",
+        encoding="utf-8"
+    ) as f:
+
+        json.dump(
+            news,
+            f,
+            ensure_ascii=False,
+            indent=2
+        )
+
+    print()
+    print("=" * 70)
+    print(f"✅ تم حفظ {len(news)} خبراً في {OUTPUT_FILE}")
+    print("=" * 70)
+
+
+# =========================================================
+# التشغيل
+# =========================================================
+
+def main():
+
+    all_news = []
+
+    print()
+    print("🇾🇪 نبض اليمن - جلب الأخبار")
+    print()
+
+    for source in SOURCES:
+
+        items = fetch_source(source)
+
+        all_news.extend(items)
+
+        time.sleep(0.5)
+
+    all_news = remove_duplicates(
+        all_news
+    )
+
+    all_news = sort_news(
+        all_news
+    )
+
+    save_news(
+        all_news
+    )
+
+
+if __name__ == "__main__":
+    main()
