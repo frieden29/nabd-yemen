@@ -186,11 +186,8 @@ def extract_image(entry):
 
         for item in entry.links:
 
-            href =
-                item.get("href")
-
-            typ =
-                item.get("type", "")
+            href = item.get("href")
+            typ = item.get("type", "")
 
             if (
                 href
