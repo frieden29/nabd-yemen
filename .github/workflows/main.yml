@@ -1,13 +1,7 @@
 name: Yemen News Bot
 
 on:
-
-  # تشغيل يدوي
   workflow_dispatch:
-
-  # تشغيل تلقائي كل ربع ساعة
-  schedule:
-    - cron: "0,15,30,45 * * * *"
 
 
 permissions:
