@@ -4,6 +4,41 @@
 
 
 /* =========================================================
+   Firebase
+   ========================================================= */
+
+import { initializeApp }
+    from "https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js";
+
+import {
+    getDatabase,
+    ref,
+    get,
+    runTransaction,
+    onValue
+}
+    from "https://www.gstatic.com/firebasejs/12.19.0/firebase-database.js";
+
+
+const firebaseConfig = {
+    apiKey: "AIzaSyBgEsIfIPj10BRXYwvJRkxgvmDRsPXnqkM",
+    authDomain: "nabd-yemen.firebaseapp.com",
+    databaseURL: "https://nabd-yemen-default-rtdb.europe-west1.firebasedatabase.app",
+    projectId: "nabd-yemen",
+    storageBucket: "nabd-yemen.firebasestorage.app",
+    messagingSenderId: "178851320724",
+    appId: "1:178851320724:web:3c1b9c17be1c518b127581"
+};
+
+
+const firebaseApp =
+    initializeApp(firebaseConfig);
+
+const database =
+    getDatabase(firebaseApp);
+
+
+/* =========================================================
    العناصر
    ========================================================= */
 
@@ -39,6 +74,9 @@ const STORAGE_KEY =
 const SORT_KEY =
     "nabd-yemen-sort";
 
+const VISITOR_KEY =
+    "nabd-yemen-visitor-counted";
+
 
 /* =========================================================
    المتغيرات
@@ -52,6 +90,8 @@ let currentSort =
 
 let isLoading = false;
 
+let articleReads = {};
+
 
 /* =========================================================
    تنظيف النص
@@ -59,9 +99,11 @@ let isLoading = false;
 
 function escapeHtml(value) {
 
-    if (value === null ||
-        value === undefined) {
-
+    if (
+        value === null
+        ||
+        value === undefined
+    ) {
         return "";
     }
 
@@ -123,78 +165,6 @@ function getTimeValue(item) {
     }
 
     return 0;
-}
-
-
-/* =========================================================
-   عدد القراءات
-   ========================================================= */
-
-function getViews(item) {
-
-    const value =
-        item.views
-        ?? item.reads
-        ?? item.view_count
-        ?? item.clicks
-        ?? 0;
-
-    const number =
-        Number(value);
-
-    if (
-        Number.isNaN(number)
-    ) {
-        return 0;
-    }
-
-    return number;
-}
-
-
-/* =========================================================
-   تنسيق التاريخ
-   ========================================================= */
-
-function formatDate(item) {
-
-    const timestamp =
-        getTimeValue(item);
-
-    if (!timestamp) {
-
-        return (
-            item.date_text
-            ||
-            item.time
-            ||
-            ""
-        );
-    }
-
-    try {
-
-        const date =
-            new Date(timestamp);
-
-        return new Intl.DateTimeFormat(
-            "ar",
-            {
-                year: "numeric",
-                month: "2-digit",
-                day: "2-digit",
-
-                hour: "2-digit",
-                minute: "2-digit"
-            }
-        ).format(date);
-
-    }
-
-    catch {
-
-        return "";
-    }
 }
 
 
@@ -287,6 +257,261 @@ function getDescription(item) {
         ||
         ""
     );
+}
+
+
+/* =========================================================
+   إنشاء رقم ثابت لكل خبر
+   ========================================================= */
+
+function getArticleId(item) {
+
+    const text =
+        getLink(item)
+        ||
+        getTitle(item);
+
+    let hash =
+        2166136261;
+
+    for (
+        let i = 0;
+        i < text.length;
+        i++
+    ) {
+
+        hash ^=
+            text.charCodeAt(i);
+
+        hash =
+            Math.imul(
+                hash,
+                16777619
+            );
+    }
+
+    return (
+        "a_"
+        +
+        (hash >>> 0).toString(36)
+    );
+}
+
+
+/* =========================================================
+   عدد القراءات
+   ========================================================= */
+
+function getViews(item) {
+
+    const articleId =
+        getArticleId(item);
+
+    const firebaseReads =
+        articleReads[articleId]?.reads;
+
+    if (
+        firebaseReads !== undefined
+        &&
+        firebaseReads !== null
+    ) {
+
+        return (
+            Number(firebaseReads)
+            ||
+            0
+        );
+    }
+
+
+    const value =
+        item.views
+        ?? item.reads
+        ?? item.view_count
+        ?? item.clicks
+        ?? 0;
+
+    const number =
+        Number(value);
+
+    if (
+        Number.isNaN(number)
+    ) {
+        return 0;
+    }
+
+    return number;
+}
+
+
+/* =========================================================
+   تنسيق التاريخ
+   ========================================================= */
+
+function formatDate(item) {
+
+    const timestamp =
+        getTimeValue(item);
+
+    if (!timestamp) {
+
+        return (
+            item.date_text
+            ||
+            item.time
+            ||
+            ""
+        );
+    }
+
+    try {
+
+        const date =
+            new Date(timestamp);
+
+        return new Intl.DateTimeFormat(
+            "ar",
+            {
+                year: "numeric",
+                month: "2-digit",
+                day: "2-digit",
+
+                hour: "2-digit",
+                minute: "2-digit"
+            }
+        ).format(date);
+
+    }
+
+    catch {
+
+        return "";
+    }
+}
+
+
+/* =========================================================
+   زيادة عداد Firebase
+   ========================================================= */
+
+async function incrementCounter(
+    path
+) {
+
+    try {
+
+        await runTransaction(
+            ref(
+                database,
+                path
+            ),
+            currentValue => {
+
+                return (
+                    Number(
+                        currentValue
+                    )
+                    ||
+                    0
+                ) + 1;
+            }
+        );
+
+    }
+
+    catch (error) {
+
+        console.error(
+            "Firebase counter error:",
+            path,
+            error
+        );
+    }
+}
+
+
+/* =========================================================
+   تسجيل الزيارة وفتح التطبيق
+   ========================================================= */
+
+async function registerAppVisit() {
+
+    await incrementCounter(
+        "stats/views"
+    );
+
+
+    if (
+        !localStorage.getItem(
+            VISITOR_KEY
+        )
+    ) {
+
+        await incrementCounter(
+            "stats/visits"
+        );
+
+        localStorage.setItem(
+            VISITOR_KEY,
+            "1"
+        );
+    }
+}
+
+
+/* =========================================================
+   متابعة قراءات الأخبار من Firebase
+   ========================================================= */
+
+function listenToArticleReads() {
+
+    onValue(
+        ref(
+            database,
+            "articles"
+        ),
+        snapshot => {
+
+            articleReads =
+                snapshot.val()
+                ||
+                {};
+
+            renderNews();
+        },
+        error => {
+
+            console.error(
+                "تعذر قراءة عدادات الأخبار:",
+                error
+            );
+        }
+    );
+}
+
+
+/* =========================================================
+   تسجيل قراءة خبر
+   ========================================================= */
+
+async function registerArticleRead(
+    item
+) {
+
+    const articleId =
+        getArticleId(item);
+
+    await Promise.all([
+
+        incrementCounter(
+            "stats/reads"
+        ),
+
+        incrementCounter(
+            `articles/${articleId}/reads`
+        )
+
+    ]);
 }
 
 
@@ -454,7 +679,7 @@ function createNewsCard(item) {
 
 
     /* -----------------------------------------
-       المشاهدات
+       القراءات
        ----------------------------------------- */
 
     let viewsHtml = "";
@@ -486,6 +711,7 @@ function createNewsCard(item) {
             <h2 class="news-title">
 
                 <a
+                    class="news-title-link"
                     href="${link}"
                     target="_blank"
                     rel="noopener noreferrer"
@@ -516,6 +742,45 @@ function createNewsCard(item) {
 
         </div>
     `;
+
+
+    const titleLink =
+        article.querySelector(
+            ".news-title-link"
+        );
+
+    const readMoreLink =
+        article.querySelector(
+            ".read-more"
+        );
+
+
+    const handleRead =
+        () => {
+
+            registerArticleRead(
+                item
+            );
+        };
+
+
+    if (titleLink) {
+
+        titleLink.addEventListener(
+            "click",
+            handleRead
+        );
+    }
+
+
+    if (readMoreLink) {
+
+        readMoreLink.addEventListener(
+            "click",
+            handleRead
+        );
+    }
+
 
     return article;
 }
@@ -905,11 +1170,6 @@ async function loadNews(
         );
 
 
-        /*
-         * إذا كانت لدينا أخبار محفوظة،
-         * نتركها ظاهرة للمستخدم.
-         */
-
         if (
             allNews.length === 0
         ) {
@@ -1009,6 +1269,20 @@ sortPopularButton
 async function startApp() {
 
     updateSortButtons();
+
+
+    /*
+     * نسجل فتح التطبيق والزيارة
+     */
+
+    registerAppVisit();
+
+
+    /*
+     * نبدأ متابعة قراءات الأخبار.
+     */
+
+    listenToArticleReads();
 
 
     /*
