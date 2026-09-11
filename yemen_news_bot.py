@@ -17,7 +17,9 @@ from bs4 import BeautifulSoup
 # =========================================================
 
 OUTPUT_FILE = "news.json"
+
 MAX_PER_SOURCE = 20
+
 REQUEST_TIMEOUT = 15
 
 
@@ -26,9 +28,15 @@ REQUEST_TIMEOUT = 15
 # =========================================================
 
 YEMEN_KEYWORDS = [
+
     "اليمن",
+    "يمن",
+
     "اليمني",
     "اليمنية",
+    "اليمنيين",
+    "اليمنيون",
+
     "صنعاء",
     "عدن",
     "مأرب",
@@ -51,15 +59,54 @@ YEMEN_KEYWORDS = [
     "حجة",
     "عمران",
     "المخا",
+
     "باب المندب",
+    "مضيق باب المندب",
+
     "البحر الأحمر",
+
     "الحوثي",
     "الحوثيين",
     "الحوثيون",
+    "الحوثية",
+
     "أنصار الله",
+
     "مجلس القيادة الرئاسي",
     "الحكومة اليمنية",
+
+    "الرئاسي اليمني",
+
+    "القوات اليمنية",
+
+    "الجيش اليمني",
+
+    "السواحل اليمنية",
+
+    "المياه اليمنية",
+
+    "الموانئ اليمنية",
+
+    "ميناء الحديدة",
+    "ميناء عدن",
+    "ميناء المخا",
+
 ]
+
+
+# =========================================================
+# المصادر التي يجب أن تكون أخبارها عن اليمن فقط
+# =========================================================
+
+YEMEN_ONLY_SOURCES = {
+
+    "BBC عربي",
+
+    "الجزيرة",
+
+    "الإخبارية السورية",
+
+}
 
 
 # =========================================================
@@ -68,46 +115,57 @@ YEMEN_KEYWORDS = [
 
 SOURCES = [
 
-    # 🇾🇪 اليمن
+    # =====================================================
+    # مصادر يمنية
+    # =====================================================
 
     {
         "name": "المشهد اليمني",
         "rss": "https://www.almashhad.news/feed",
+        "yemen_only": False,
     },
 
     {
         "name": "عدن الغد",
         "rss": "https://www.adngad.net/feed",
+        "yemen_only": False,
     },
 
     {
         "name": "الصحوة نت",
         "rss": "https://www.alsahwa-yemen.net/rss",
+        "yemen_only": False,
     },
 
     {
         "name": "قناة بلقيس",
         "rss": "https://belqees.net/rss",
+        "yemen_only": False,
     },
 
     {
         "name": "وكالة سبأ",
         "rss": "https://www.sabanew.net/rss.php?lang=ar",
+        "yemen_only": False,
     },
 
-    # 🌍 مصادر عربية ودولية
+
+    # =====================================================
+    # مصادر عربية ودولية
+    # لا نأخذ منها إلا الأخبار المتعلقة باليمن
+    # =====================================================
 
     {
         "name": "BBC عربي",
         "rss": "https://feeds.bbci.co.uk/arabic/rss.xml",
+        "yemen_only": True,
     },
 
 ]
 
 
 # =========================================================
-# المصادر التي نقرأها مباشرة من الموقع
-# وهذه المصادر نريد منها أخبار اليمن فقط
+# المصادر التي نقرأها مباشرة من صفحات الموقع
 # =========================================================
 
 WEB_SOURCES = [
@@ -136,15 +194,20 @@ WEB_SOURCES = [
 HEADERS = {
 
     "User-Agent": (
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Mozilla/5.0 "
+        "(Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 "
+        "(KHTML, like Gecko) "
         "Chrome/140 Safari/537.36"
     ),
 
     "Accept": (
-        "text/html,application/xhtml+xml,"
+        "text/html,"
+        "application/xhtml+xml,"
         "application/xml;q=0.9,"
-        "image/avif,image/webp,*/*;q=0.8"
+        "image/avif,"
+        "image/webp,"
+        "*/*;q=0.8"
     ),
 
     "Accept-Language":
@@ -154,7 +217,7 @@ HEADERS = {
 
 
 # =========================================================
-# أدوات مساعدة
+# تنظيف النص
 # =========================================================
 
 def clean_text(text):
@@ -185,6 +248,10 @@ def clean_text(text):
     return text.strip()
 
 
+# =========================================================
+# تنظيف الرابط
+# =========================================================
+
 def normalize_link(link):
 
     if not link:
@@ -194,6 +261,10 @@ def normalize_link(link):
         link
     ).strip()
 
+
+# =========================================================
+# فحص اسم النطاق
+# =========================================================
 
 def same_domain(
     link,
@@ -210,7 +281,9 @@ def same_domain(
 
         return False
 
+
     domain = domain.lower()
+
 
     return (
         host == domain
@@ -222,6 +295,53 @@ def same_domain(
 
 
 # =========================================================
+# توحيد النص العربي للمقارنة
+# =========================================================
+
+def normalize_arabic_text(text):
+
+    text = clean_text(
+        text
+    ).lower()
+
+    replacements = {
+
+        "أ": "ا",
+        "إ": "ا",
+        "آ": "ا",
+
+        "ى": "ي",
+
+        "ؤ": "و",
+
+        "ئ": "ي",
+
+        "ة": "ه",
+
+    }
+
+
+    for old, new in replacements.items():
+
+        text = text.replace(
+            old,
+            new
+        )
+
+
+    # حذف التشكيل
+
+    text = re.sub(
+        r"[\u064B-\u065F\u0670]",
+        "",
+        text
+    )
+
+
+    return text
+
+
+# =========================================================
 # فحص هل الخبر متعلق باليمن
 # =========================================================
 
@@ -230,26 +350,38 @@ def is_yemen_related(
     description=""
 ):
 
-    text = (
+    text = normalize_arabic_text(
         f"{title} {description}"
-    ).lower()
+    )
+
 
     for keyword in YEMEN_KEYWORDS:
 
-        if keyword.lower() in text:
+        normalized_keyword = (
+            normalize_arabic_text(
+                keyword
+            )
+        )
+
+
+        if normalized_keyword in text:
+
             return True
+
 
     return False
 
 
 # =========================================================
-# استخراج صورة RSS
+# استخراج صورة من RSS
 # =========================================================
 
 def extract_image(entry):
 
     candidates = []
 
+
+    # media_content
 
     if hasattr(
         entry,
@@ -262,12 +394,15 @@ def extract_image(entry):
                 "url"
             )
 
+
             if url:
 
                 candidates.append(
                     url
                 )
 
+
+    # media_thumbnail
 
     if hasattr(
         entry,
@@ -280,12 +415,15 @@ def extract_image(entry):
                 "url"
             )
 
+
             if url:
 
                 candidates.append(
                     url
                 )
 
+
+    # روابط الصور
 
     if hasattr(
         entry,
@@ -302,6 +440,7 @@ def extract_image(entry):
                 "type",
                 ""
             )
+
 
             if (
                 href
@@ -321,6 +460,8 @@ def extract_image(entry):
         return candidates[0]
 
 
+    # صورة داخل الوصف
+
     summary = getattr(
         entry,
         "summary",
@@ -339,6 +480,7 @@ def extract_image(entry):
             "img"
         )
 
+
         if (
             img
             and
@@ -352,14 +494,17 @@ def extract_image(entry):
 
 
 # =========================================================
-# التاريخ
+# قراءة التاريخ
 # =========================================================
 
 def parse_date(entry):
 
     for attr in (
+
         "published_parsed",
+
         "updated_parsed",
+
     ):
 
         value = getattr(
@@ -367,6 +512,7 @@ def parse_date(entry):
             attr,
             None
         )
+
 
         if value:
 
@@ -377,7 +523,9 @@ def parse_date(entry):
                     tzinfo=timezone.utc
                 )
 
+
                 return dt.isoformat()
+
 
             except Exception:
 
@@ -398,6 +546,11 @@ def fetch_source(source):
     name = source["name"]
 
     rss = source["rss"]
+
+    yemen_only = source.get(
+        "yemen_only",
+        False
+    )
 
 
     print("=" * 70)
@@ -421,6 +574,7 @@ def fetch_source(source):
             timeout=REQUEST_TIMEOUT,
         )
 
+
         response.raise_for_status()
 
 
@@ -440,10 +594,26 @@ def fetch_source(source):
 
     items = []
 
+    checked = 0
 
-    for entry in feed.entries[
-        :MAX_PER_SOURCE
-    ]:
+
+    # نقرأ عدداً أكبر من العناصر للمصادر العامة
+    # حتى نجد أخبار اليمن بينها
+
+    entries = feed.entries
+
+
+    if not yemen_only:
+
+        entries = entries[
+            :MAX_PER_SOURCE
+        ]
+
+
+    for entry in entries:
+
+        checked += 1
+
 
         title = clean_text(
             getattr(
@@ -476,6 +646,29 @@ def fetch_source(source):
         )
 
 
+        if (
+            not title
+            or
+            not link
+        ):
+
+            continue
+
+
+        # =================================================
+        # فلترة المصادر العامة
+        # =================================================
+
+        if yemen_only:
+
+            if not is_yemen_related(
+                title,
+                description
+            ):
+
+                continue
+
+
         image = extract_image(
             entry
         )
@@ -484,15 +677,6 @@ def fetch_source(source):
         published_at = parse_date(
             entry
         )
-
-
-        if (
-            not title
-            or
-            not link
-        ):
-
-            continue
 
 
         item = {
@@ -526,9 +710,26 @@ def fetch_source(source):
         )
 
 
-    print(
-        f"✅ تم استخراج {len(items)} خبراً"
-    )
+        if (
+            len(items)
+            >=
+            MAX_PER_SOURCE
+        ):
+
+            break
+
+
+    if yemen_only:
+
+        print(
+            f"✅ تم استخراج {len(items)} خبراً يمنياً"
+        )
+
+    else:
+
+        print(
+            f"✅ تم استخراج {len(items)} خبراً"
+        )
 
 
     return items
@@ -590,6 +791,7 @@ def extract_html_image(
             ""
         )
 
+
         if srcset:
 
             image = (
@@ -612,7 +814,47 @@ def extract_html_image(
 
 
 # =========================================================
-# قراءة موقع إخباري مباشرة
+# استخراج الوصف من محيط الخبر
+# =========================================================
+
+def extract_html_description(
+    anchor
+):
+
+    container = anchor.find_parent(
+        [
+            "article",
+            "div",
+            "li",
+        ]
+    )
+
+
+    if not container:
+
+        return ""
+
+
+    paragraph = container.find(
+        "p"
+    )
+
+
+    if not paragraph:
+
+        return ""
+
+
+    return clean_text(
+        paragraph.get_text(
+            " ",
+            strip=True
+        )
+    )
+
+
+# =========================================================
+# قراءة مصدر ويب
 # =========================================================
 
 def fetch_web_source(source):
@@ -649,6 +891,7 @@ def fetch_web_source(source):
             headers=HEADERS,
             timeout=REQUEST_TIMEOUT,
         )
+
 
         response.raise_for_status()
 
@@ -754,43 +997,15 @@ def fetch_web_source(source):
         )
 
 
-        container = anchor.find_parent(
-            [
-                "article",
-                "div",
-                "li"
-            ]
+        description = (
+            extract_html_description(
+                anchor
+            )
         )
 
 
-        image = ""
-
-        description = ""
-
-
-        if container:
-
-            image = extract_html_image(
-                container,
-                url
-            )
-
-            paragraph = container.find(
-                "p"
-            )
-
-            if paragraph:
-
-                description = clean_text(
-                    paragraph.get_text(
-                        " ",
-                        strip=True
-                    )
-                )
-
-
         # =================================================
-        # فلترة الجزيرة والإخبارية السورية
+        # فلترة الأخبار
         # =================================================
 
         if yemen_only:
@@ -801,6 +1016,26 @@ def fetch_web_source(source):
             ):
 
                 continue
+
+
+        container = anchor.find_parent(
+            [
+                "article",
+                "div",
+                "li",
+            ]
+        )
+
+
+        image = ""
+
+
+        if container:
+
+            image = extract_html_image(
+                container,
+                url
+            )
 
 
         item = {
@@ -845,15 +1080,106 @@ def fetch_web_source(source):
             break
 
 
-    print(
-        f"✅ تم استخراج {len(items)} خبراً يمنياً"
-        if yemen_only
-        else
-        f"✅ تم استخراج {len(items)} خبراً"
-    )
+    if yemen_only:
+
+        print(
+            f"✅ تم استخراج {len(items)} خبراً يمنياً"
+        )
+
+    else:
+
+        print(
+            f"✅ تم استخراج {len(items)} خبراً"
+        )
 
 
     return items
+
+
+# =========================================================
+# فلترة نهائية
+# =========================================================
+
+def final_yemen_filter(news):
+
+    filtered_news = []
+
+    removed_count = 0
+
+
+    for item in news:
+
+        source = item.get(
+            "source",
+            ""
+        )
+
+
+        # المصادر اليمنية تبقى كما هي
+
+        if (
+            source
+            not in
+            YEMEN_ONLY_SOURCES
+        ):
+
+            filtered_news.append(
+                item
+            )
+
+            continue
+
+
+        title = item.get(
+            "title",
+            ""
+        )
+
+        description = item.get(
+            "description",
+            ""
+        )
+
+
+        # BBC والجزيرة والإخبارية السورية
+        # لا نسمح لها إلا بأخبار اليمن
+
+        if is_yemen_related(
+            title,
+            description
+        ):
+
+            filtered_news.append(
+                item
+            )
+
+        else:
+
+            removed_count += 1
+
+            print(
+                "🗑️ تم حذف خبر غير متعلق باليمن:"
+            )
+
+            print(
+                f"   المصدر: {source}"
+            )
+
+            print(
+                f"   العنوان: {title}"
+            )
+
+
+    print("=" * 70)
+
+    print(
+        f"🇾🇪 الفلترة النهائية: حذف {removed_count} خبراً غير متعلق باليمن"
+    )
+
+    print("=" * 70)
+
+
+    return filtered_news
 
 
 # =========================================================
@@ -964,7 +1290,7 @@ def sort_news(news):
 
 
 # =========================================================
-# حفظ الملف
+# حفظ news.json
 # =========================================================
 
 def save_news(news):
@@ -1006,13 +1332,15 @@ def main():
     print()
 
     print(
-        "🇾🇪 نبض اليمن - جلب الأخبار"
+        "🇾🇪 نبض اليوم - جلب أخبار اليمن"
     )
 
     print()
 
 
+    # =====================================================
     # RSS
+    # =====================================================
 
     for source in SOURCES:
 
@@ -1020,16 +1348,20 @@ def main():
             source
         )
 
+
         all_news.extend(
             items
         )
+
 
         time.sleep(
             0.5
         )
 
 
+    # =====================================================
     # المواقع المباشرة
+    # =====================================================
 
     for source in WEB_SOURCES:
 
@@ -1037,24 +1369,47 @@ def main():
             source
         )
 
+
         all_news.extend(
             items
         )
+
 
         time.sleep(
             0.5
         )
 
 
+    # =====================================================
+    # فلترة نهائية
+    # =====================================================
+
+    all_news = final_yemen_filter(
+        all_news
+    )
+
+
+    # =====================================================
+    # إزالة التكرار
+    # =====================================================
+
     all_news = remove_duplicates(
         all_news
     )
 
 
+    # =====================================================
+    # ترتيب الأخبار
+    # =====================================================
+
     all_news = sort_news(
         all_news
     )
 
+
+    # =====================================================
+    # حفظ الملف
+    # =====================================================
 
     save_news(
         all_news
@@ -1062,4 +1417,5 @@ def main():
 
 
 if __name__ == "__main__":
+
     main()

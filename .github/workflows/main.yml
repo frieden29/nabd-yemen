@@ -1,45 +1,81 @@
 name: Yemen News Bot
 
 on:
+
+  # تشغيل يدوي
   workflow_dispatch:
 
+  # تشغيل تلقائي كل ربع ساعة
   schedule:
     - cron: "0,15,30,45 * * * *"
+
 
 permissions:
   contents: write
 
+
 jobs:
+
   update-news:
+
     runs-on: ubuntu-latest
 
+
     steps:
+
+      # =====================================================
+      # تحميل المشروع
+      # =====================================================
+
       - name: Download project
         uses: actions/checkout@v4
+
+
+      # =====================================================
+      # إعداد Python
+      # =====================================================
 
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.13"
 
+
+      # =====================================================
+      # تثبيت المكتبات
+      # =====================================================
+
       - name: Install requirements
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
+          pip install requests feedparser beautifulsoup4
 
-      - name: Run Yemen news bot
+
+      # =====================================================
+      # تشغيل بوت الأخبار
+      # =====================================================
+
+      - name: Run python yemen_news_bot.py
         run: |
           python yemen_news_bot.py
 
-      - name: Save updated news
+
+      # =====================================================
+      # حفظ news.json في GitHub
+      # =====================================================
+
+      - name: Save news.json
         run: |
-          git config user.name "Yemen News Bot"
-          git config user.email "actions@github.com"
+
+          git config user.name "github-actions[bot]"
+
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
           git add news.json
 
-          if git diff --cached --quiet; then
-            echo "No news changes."
+          if git diff --cached --quiet
+          then
+            echo "No changes in news.json"
           else
             git commit -m "Update Yemen news"
             git push
