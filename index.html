@@ -16,10 +16,10 @@
 
     <meta
         name="description"
-        content="نبض اليمن - آخر الأخبار اليمنية"
+        content="آخر أخبار اليمن من مصادر مختلفة"
     >
 
-    <title>نبض اليمن</title>
+    <title>نبض اليوم</title>
 
     <!-- ملف تصميم التطبيق -->
     <link
@@ -52,11 +52,11 @@
             <div class="brand-text">
 
                 <h1>
-                    نبض اليمن
+                    نبض اليوم
                 </h1>
 
                 <p>
-                    آخر الأخبار اليمنية والعربية
+                    آخر أخبار اليمن من مصادر مختلفة
                 </p>
 
             </div>
@@ -67,14 +67,17 @@
 
 
     <!-- =====================================================
-         شريط التحكم
+         المحتوى الرئيسي
          ===================================================== -->
 
     <main class="app-container">
 
-        <section class="controls">
 
-            <!-- تحديث الأخبار -->
+        <!-- =================================================
+             أزرار التحكم
+             ================================================= -->
+
+        <section class="controls">
 
             <button
                 id="refreshButton"
@@ -86,8 +89,6 @@
             </button>
 
 
-            <!-- ترتيب حسب الأحدث -->
-
             <button
                 id="sortNewestButton"
                 class="control-button active"
@@ -97,8 +98,6 @@
             </button>
 
 
-            <!-- ترتيب حسب الأكثر قراءة -->
-
             <button
                 id="sortPopularButton"
                 class="control-button"
@@ -106,6 +105,65 @@
             >
                 الأكثر قراءة
             </button>
+
+        </section>
+
+
+        <!-- =================================================
+             إحصائيات التطبيق
+             ================================================= -->
+
+        <section class="stats-bar">
+
+            <div class="stat-item">
+
+                <span class="stat-icon">
+                    👥
+                </span>
+
+                <span class="stat-label">
+                    الزوار
+                </span>
+
+                <strong id="visitsCount">
+                    0
+                </strong>
+
+            </div>
+
+
+            <div class="stat-item">
+
+                <span class="stat-icon">
+                    👁️
+                </span>
+
+                <span class="stat-label">
+                    المشاهدات
+                </span>
+
+                <strong id="viewsCount">
+                    0
+                </strong>
+
+            </div>
+
+
+            <div class="stat-item">
+
+                <span class="stat-icon">
+                    📖
+                </span>
+
+                <span class="stat-label">
+                    القراءات
+                </span>
+
+                <strong id="readsCount">
+                    0
+                </strong>
+
+            </div>
 
         </section>
 
@@ -157,15 +215,20 @@
     <footer class="app-footer">
 
         <p>
-            نبض اليمن 🇾🇪
+            نبض اليوم 🇾🇪
         </p>
 
     </footer>
 
 
-    <!-- ملف JavaScript الرئيسي -->
+    <!-- =====================================================
+         ملف JavaScript الرئيسي
+         ===================================================== -->
 
-    <script type="module" src="./app.js"></script>
+    <script
+        type="module"
+        src="./app.js"
+    ></script>
 
 
     <!-- =====================================================
@@ -184,17 +247,21 @@
                         .register("./service-worker.js")
                         .then(
                             () => {
+
                                 console.log(
                                     "Service Worker registered"
                                 );
+
                             }
                         )
                         .catch(
                             error => {
+
                                 console.error(
                                     "Service Worker error:",
                                     error
                                 );
+
                             }
                         );
 

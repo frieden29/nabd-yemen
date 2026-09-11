@@ -132,7 +132,7 @@ body {
 
     gap: 8px;
 
-    margin-bottom: 16px;
+    margin-bottom: 14px;
 }
 
 
@@ -213,6 +213,77 @@ body {
 .refresh-button.loading {
     opacity: 0.65;
     pointer-events: none;
+}
+
+
+/* =========================================================
+   شريط الإحصائيات
+   ========================================================= */
+
+.stats-bar {
+    display: grid;
+
+    grid-template-columns:
+        repeat(3, 1fr);
+
+    gap: 8px;
+
+    margin-bottom: 16px;
+}
+
+
+.stat-item {
+    background: #ffffff;
+
+    border:
+        1px solid
+        #e5e7eb;
+
+    border-radius: 13px;
+
+    min-height: 78px;
+
+    padding: 10px 8px;
+
+    display: flex;
+    flex-direction: column;
+
+    align-items: center;
+    justify-content: center;
+
+    gap: 3px;
+
+    text-align: center;
+
+    box-shadow:
+        0 2px 8px
+        rgba(0, 0, 0, 0.04);
+}
+
+
+.stat-icon {
+    font-size: 20px;
+    line-height: 1;
+}
+
+
+.stat-label {
+    font-size: 12px;
+    font-weight: 700;
+
+    color: #6b7280;
+}
+
+
+.stat-item strong {
+    display: block;
+
+    font-size: 19px;
+    line-height: 1.3;
+
+    font-weight: 800;
+
+    color: #111827;
 }
 
 
@@ -545,6 +616,35 @@ body {
     }
 
 
+    .stats-bar {
+        gap: 6px;
+
+        margin-bottom: 14px;
+    }
+
+
+    .stat-item {
+        min-height: 72px;
+
+        padding: 8px 5px;
+    }
+
+
+    .stat-icon {
+        font-size: 18px;
+    }
+
+
+    .stat-label {
+        font-size: 11px;
+    }
+
+
+    .stat-item strong {
+        font-size: 17px;
+    }
+
+
     .news-image {
         height: 195px;
     }
@@ -575,6 +675,21 @@ body {
 
     .app-container {
         padding-top: 22px;
+    }
+
+
+    .stats-bar {
+        gap: 10px;
+    }
+
+
+    .stat-item {
+        min-height: 85px;
+    }
+
+
+    .stat-item strong {
+        font-size: 21px;
     }
 
 
