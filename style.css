@@ -1,1 +1,607 @@
+/* =========================================================
+   نبض اليمن - style.css
+   ========================================================= */
 
+
+/* =========================================================
+   إعدادات عامة
+   ========================================================= */
+
+* {
+    box-sizing: border-box;
+}
+
+html {
+    direction: rtl;
+    scroll-behavior: smooth;
+}
+
+body {
+    margin: 0;
+    padding: 0;
+
+    font-family:
+        -apple-system,
+        BlinkMacSystemFont,
+        "Segoe UI",
+        Tahoma,
+        Arial,
+        sans-serif;
+
+    background: #f3f4f6;
+    color: #1f2937;
+
+    min-height: 100vh;
+}
+
+
+/* =========================================================
+   رأس التطبيق
+   ========================================================= */
+
+.app-header {
+    background: #ffffff;
+
+    border-top: 5px solid #ce1126;
+    border-bottom: 1px solid #e5e7eb;
+
+    padding:
+        calc(14px + env(safe-area-inset-top))
+        16px
+        14px;
+
+    position: sticky;
+    top: 0;
+    z-index: 100;
+
+    box-shadow:
+        0 2px 8px
+        rgba(0, 0, 0, 0.05);
+}
+
+
+.brand {
+    max-width: 900px;
+    margin: 0 auto;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    gap: 12px;
+}
+
+
+.flag {
+    font-size: 38px;
+    line-height: 1;
+}
+
+
+.brand-text {
+    text-align: right;
+}
+
+
+.brand-text h1 {
+    margin: 0;
+
+    font-size: 25px;
+    font-weight: 800;
+
+    color: #111827;
+}
+
+
+.brand-text p {
+    margin: 4px 0 0;
+
+    font-size: 13px;
+    color: #6b7280;
+}
+
+
+/* =========================================================
+   الحاوية الرئيسية
+   ========================================================= */
+
+.app-container {
+    width: 100%;
+    max-width: 900px;
+
+    margin: 0 auto;
+
+    padding:
+        16px
+        12px
+        30px;
+}
+
+
+/* =========================================================
+   أزرار التحكم
+   ========================================================= */
+
+.controls {
+    display: grid;
+
+    grid-template-columns:
+        1.35fr
+        1fr
+        1fr;
+
+    gap: 8px;
+
+    margin-bottom: 16px;
+}
+
+
+.control-button {
+    appearance: none;
+
+    border: 1px solid #d1d5db;
+    border-radius: 12px;
+
+    background: #ffffff;
+    color: #374151;
+
+    min-height: 46px;
+
+    padding: 8px 10px;
+
+    font-size: 14px;
+    font-weight: 700;
+
+    cursor: pointer;
+
+    transition:
+        transform 0.15s ease,
+        background 0.15s ease,
+        border-color 0.15s ease,
+        box-shadow 0.15s ease;
+}
+
+
+.control-button:active {
+    transform: scale(0.97);
+}
+
+
+.control-button:hover {
+    border-color: #9ca3af;
+}
+
+
+.control-button.active {
+    background: #111827;
+    color: #ffffff;
+
+    border-color: #111827;
+
+    box-shadow:
+        0 3px 8px
+        rgba(0, 0, 0, 0.12);
+}
+
+
+/* =========================================================
+   زر تحديث الأخبار
+   ========================================================= */
+
+.refresh-button {
+    display: flex;
+
+    align-items: center;
+    justify-content: center;
+
+    gap: 7px;
+
+    background: #ffffff;
+    color: #111827;
+
+    border:
+        1px solid
+        #ce1126;
+}
+
+
+.refresh-button span:first-child {
+    font-size: 20px;
+}
+
+
+.refresh-button.loading {
+    opacity: 0.65;
+    pointer-events: none;
+}
+
+
+/* =========================================================
+   حالة التحميل
+   ========================================================= */
+
+.status-box {
+    background: #ffffff;
+
+    border:
+        1px solid
+        #e5e7eb;
+
+    border-radius: 12px;
+
+    padding: 14px;
+
+    margin-bottom: 14px;
+
+    text-align: center;
+
+    font-size: 14px;
+    font-weight: 600;
+
+    color: #4b5563;
+}
+
+
+/* =========================================================
+   قائمة الأخبار
+   ========================================================= */
+
+.news-list {
+    display: flex;
+    flex-direction: column;
+
+    gap: 12px;
+}
+
+
+/* =========================================================
+   بطاقة الخبر
+   ========================================================= */
+
+.news-card {
+    background: #ffffff;
+
+    border:
+        1px solid
+        #e5e7eb;
+
+    border-radius: 15px;
+
+    overflow: hidden;
+
+    box-shadow:
+        0 3px 12px
+        rgba(0, 0, 0, 0.055);
+
+    transition:
+        transform 0.15s ease,
+        box-shadow 0.15s ease;
+}
+
+
+.news-card:hover {
+    transform: translateY(-1px);
+
+    box-shadow:
+        0 5px 16px
+        rgba(0, 0, 0, 0.08);
+}
+
+
+/* =========================================================
+   صورة الخبر
+   ========================================================= */
+
+.news-image {
+    display: block;
+
+    width: 100%;
+    height: 210px;
+
+    object-fit: cover;
+
+    background: #e5e7eb;
+}
+
+
+/* =========================================================
+   محتوى بطاقة الخبر
+   ========================================================= */
+
+.news-content {
+    padding: 14px;
+}
+
+
+.news-source {
+    display: inline-flex;
+
+    align-items: center;
+
+    margin-bottom: 8px;
+
+    padding: 4px 9px;
+
+    border-radius: 20px;
+
+    background: #f3f4f6;
+
+    color: #4b5563;
+
+    font-size: 12px;
+    font-weight: 700;
+}
+
+
+.news-title {
+    margin: 0 0 10px;
+
+    font-size: 18px;
+    line-height: 1.65;
+
+    font-weight: 800;
+
+    color: #111827;
+}
+
+
+.news-title a {
+    color: inherit;
+    text-decoration: none;
+}
+
+
+.news-title a:hover {
+    color: #ce1126;
+}
+
+
+/* =========================================================
+   وصف الخبر
+   ========================================================= */
+
+.news-description {
+    margin: 0 0 12px;
+
+    font-size: 14px;
+    line-height: 1.8;
+
+    color: #4b5563;
+}
+
+
+/* =========================================================
+   معلومات الخبر
+   ========================================================= */
+
+.news-meta {
+    display: flex;
+
+    align-items: center;
+    justify-content: space-between;
+
+    gap: 10px;
+
+    padding-top: 10px;
+
+    border-top:
+        1px solid
+        #f0f0f0;
+
+    font-size: 12px;
+
+    color: #6b7280;
+}
+
+
+.news-date {
+    white-space: nowrap;
+}
+
+
+.news-views {
+    display: flex;
+
+    align-items: center;
+
+    gap: 4px;
+}
+
+
+/* =========================================================
+   زر قراءة الخبر
+   ========================================================= */
+
+.read-more {
+    display: inline-block;
+
+    margin-top: 12px;
+
+    padding: 9px 14px;
+
+    border-radius: 9px;
+
+    background: #111827;
+
+    color: #ffffff;
+
+    text-decoration: none;
+
+    font-size: 13px;
+    font-weight: 700;
+}
+
+
+.read-more:hover {
+    background: #ce1126;
+}
+
+
+/* =========================================================
+   حالة عدم وجود أخبار
+   ========================================================= */
+
+.empty-state {
+    background: #ffffff;
+
+    border:
+        1px dashed
+        #d1d5db;
+
+    border-radius: 14px;
+
+    padding: 35px 15px;
+
+    text-align: center;
+
+    color: #6b7280;
+
+    font-size: 15px;
+}
+
+
+/* =========================================================
+   تذييل التطبيق
+   ========================================================= */
+
+.app-footer {
+    text-align: center;
+
+    padding:
+        15px
+        15px
+        calc(20px + env(safe-area-inset-bottom));
+
+    color: #6b7280;
+
+    font-size: 13px;
+}
+
+
+.app-footer p {
+    margin: 0;
+}
+
+
+/* =========================================================
+   الأجهزة الصغيرة
+   ========================================================= */
+
+@media (max-width: 600px) {
+
+    .app-header {
+        padding-left: 12px;
+        padding-right: 12px;
+    }
+
+
+    .brand {
+        justify-content: flex-start;
+    }
+
+
+    .flag {
+        font-size: 34px;
+    }
+
+
+    .brand-text h1 {
+        font-size: 22px;
+    }
+
+
+    .brand-text p {
+        font-size: 12px;
+    }
+
+
+    .app-container {
+        padding:
+            12px
+            9px
+            25px;
+    }
+
+
+    .controls {
+        grid-template-columns:
+            1fr
+            1fr;
+
+        gap: 7px;
+    }
+
+
+    .refresh-button {
+        grid-column:
+            1 / -1;
+    }
+
+
+    .control-button {
+        min-height: 44px;
+
+        font-size: 13px;
+    }
+
+
+    .news-image {
+        height: 195px;
+    }
+
+
+    .news-content {
+        padding: 13px;
+    }
+
+
+    .news-title {
+        font-size: 17px;
+    }
+
+
+    .news-description {
+        font-size: 13px;
+    }
+
+}
+
+
+/* =========================================================
+   الشاشات الكبيرة
+   ========================================================= */
+
+@media (min-width: 800px) {
+
+    .app-container {
+        padding-top: 22px;
+    }
+
+
+    .news-card {
+        display: grid;
+
+        grid-template-columns:
+            280px
+            1fr;
+    }
+
+
+    .news-image {
+        width: 280px;
+        height: 100%;
+
+        min-height: 220px;
+    }
+
+
+    .news-content {
+        padding: 18px;
+    }
+
+
+    .news-title {
+        font-size: 20px;
+    }
+
+}
