@@ -88,6 +88,13 @@ const VISITOR_KEY =
 const ARTICLE_VIEW_SESSION_KEY =
     "nabd-yemen-viewed-articles";
 
+/*
+ * الأخبار التي سبق لهذا الجهاز قراءتها.
+ * تبقى محفوظة حتى بعد إغلاق التطبيق.
+ */
+const ARTICLE_READ_KEY =
+    "nabd-yemen-read-articles";
+
 
 /* =========================================================
    المتغيرات
@@ -327,7 +334,7 @@ function getArticleId(item) {
 
 
 /* =========================================================
-   عدد مشاهدات خبر
+   عدد مشاهدات الخبر
    ========================================================= */
 
 function getArticleViews(item) {
@@ -336,7 +343,7 @@ function getArticleViews(item) {
         getArticleId(item);
 
 
-    const firebaseValue =
+    const value =
         articleStats[
             articleId
         ]?.views;
@@ -344,7 +351,7 @@ function getArticleViews(item) {
 
     const number =
         Number(
-            firebaseValue
+            value
             ??
             0
         );
@@ -363,7 +370,7 @@ function getArticleViews(item) {
 
 
 /* =========================================================
-   عدد قراءات خبر
+   عدد قراءات الخبر
    ========================================================= */
 
 function getArticleReads(item) {
@@ -457,7 +464,7 @@ function formatDate(item) {
 
 
 /* =========================================================
-   زيادة عداد في Firebase
+   زيادة عداد Firebase
    ========================================================= */
 
 async function incrementCounter(path) {
@@ -469,6 +476,7 @@ async function incrementCounter(path) {
                 database,
                 path
             ),
+
             currentValue => {
 
                 return (
@@ -501,7 +509,6 @@ async function registerAppVisit() {
     /*
      * كل فتح للتطبيق = مشاهدة عامة.
      */
-
     await incrementCounter(
         "stats/views"
     );
@@ -509,9 +516,8 @@ async function registerAppVisit() {
 
     /*
      * الزائر يحسب مرة واحدة
-     * على هذا المتصفح.
+     * لكل متصفح/جهاز.
      */
-
     if (
         !localStorage.getItem(
             VISITOR_KEY
@@ -596,7 +602,7 @@ function listenToGlobalStats() {
 
 
 /* =========================================================
-   متابعة مشاهدات وقراءات الأخبار
+   متابعة إحصائيات الأخبار
    ========================================================= */
 
 function listenToArticleStats() {
@@ -630,7 +636,7 @@ function listenToArticleStats() {
 
 
 /* =========================================================
-   الأخبار التي تمت مشاهدتها في هذه الجلسة
+   الأخبار التي شوهدت في الجلسة
    ========================================================= */
 
 function getViewedArticles() {
@@ -675,7 +681,7 @@ function getViewedArticles() {
 
 
 /* =========================================================
-   حفظ الأخبار المشاهدة
+   حفظ الأخبار المشاهدة في الجلسة
    ========================================================= */
 
 function saveViewedArticles(set) {
@@ -762,7 +768,80 @@ async function registerArticleViews(news) {
 
 
 /* =========================================================
+   الأخبار التي سبق لهذا الجهاز قراءتها
+   ========================================================= */
+
+function getReadArticles() {
+
+    try {
+
+        const value =
+            localStorage.getItem(
+                ARTICLE_READ_KEY
+            );
+
+
+        if (!value) {
+
+            return new Set();
+        }
+
+
+        const parsed =
+            JSON.parse(value);
+
+
+        if (
+            !Array.isArray(parsed)
+        ) {
+
+            return new Set();
+        }
+
+
+        return new Set(
+            parsed
+        );
+
+    }
+
+    catch {
+
+        return new Set();
+    }
+}
+
+
+/* =========================================================
+   حفظ الأخبار المقروءة
+   ========================================================= */
+
+function saveReadArticles(set) {
+
+    try {
+
+        localStorage.setItem(
+            ARTICLE_READ_KEY,
+            JSON.stringify(
+                [...set]
+            )
+        );
+
+    }
+
+    catch (error) {
+
+        console.warn(
+            "تعذر حفظ الأخبار المقروءة:",
+            error
+        );
+    }
+}
+
+
+/* =========================================================
    تسجيل قراءة خبر
+   مرة واحدة فقط لكل جهاز/متصفح
    ========================================================= */
 
 async function registerArticleRead(item) {
@@ -771,6 +850,43 @@ async function registerArticleRead(item) {
         getArticleId(item);
 
 
+    const readArticles =
+        getReadArticles();
+
+
+    /*
+     * إذا سبق لهذا الجهاز قراءة الخبر
+     * لا نزيد العداد مرة ثانية.
+     */
+    if (
+        readArticles.has(
+            articleId
+        )
+    ) {
+
+        return;
+    }
+
+
+    /*
+     * نحفظ الخبر أولاً حتى لا تؤدي
+     * الضغطة السريعة المتكررة إلى زيادة العداد.
+     */
+    readArticles.add(
+        articleId
+    );
+
+
+    saveReadArticles(
+        readArticles
+    );
+
+
+    /*
+     * زيادة:
+     * 1- القراءات العامة
+     * 2- قراءات هذا الخبر
+     */
     await Promise.all([
 
         incrementCounter(
@@ -795,10 +911,6 @@ function sortNews(news) {
         [...news];
 
 
-    /*
-     * الأكثر قراءة
-     */
-
     if (
         currentSort ===
         "popular"
@@ -821,11 +933,6 @@ function sortNews(news) {
                 }
 
 
-                /*
-                 * عند تساوي القراءات
-                 * نعرض الأحدث أولاً.
-                 */
-
                 return (
                     getTimeValue(b)
                     -
@@ -838,10 +945,6 @@ function sortNews(news) {
         return copy;
     }
 
-
-    /*
-     * الأحدث
-     */
 
     copy.sort(
         (a, b) =>
@@ -915,10 +1018,6 @@ function createNewsCard(item) {
         "news-card";
 
 
-    /* =====================================================
-       الصورة
-       ===================================================== */
-
     let imageHtml = "";
 
 
@@ -936,10 +1035,6 @@ function createNewsCard(item) {
     }
 
 
-    /* =====================================================
-       الوصف
-       ===================================================== */
-
     let descriptionHtml = "";
 
 
@@ -953,10 +1048,6 @@ function createNewsCard(item) {
     }
 
 
-    /* =====================================================
-       التاريخ
-       ===================================================== */
-
     let dateHtml = "";
 
 
@@ -969,10 +1060,6 @@ function createNewsCard(item) {
         `;
     }
 
-
-    /* =====================================================
-       البطاقة
-       ===================================================== */
 
     article.innerHTML = `
 
@@ -1043,7 +1130,7 @@ function createNewsCard(item) {
 
 
     /* =====================================================
-       إذا فشل تحميل الصورة نحذفها بالكامل
+       حذف الصورة إذا فشل تحميلها
        ===================================================== */
 
     const imageElement =
@@ -1169,7 +1256,7 @@ function renderNews() {
 
 
 /* =========================================================
-   شكل أزرار الترتيب
+   تحديث أزرار الترتيب
    ========================================================= */
 
 function updateSortButtons() {
@@ -1527,11 +1614,6 @@ async function loadNews(
 
         renderNews();
 
-
-        /*
-         * نسجل مشاهدة لكل خبر مرة واحدة
-         * في جلسة المتصفح الحالية.
-         */
 
         await registerArticleViews(
             allNews
