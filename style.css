@@ -399,7 +399,7 @@ body {
 
 
 /* =========================================================
-   محتوى بطاقة الخبر
+   محتوى الخبر
    ========================================================= */
 
 .news-content {
@@ -474,11 +474,11 @@ body {
     display: flex;
 
     align-items: center;
-    justify-content: space-between;
+    justify-content: flex-start;
 
     flex-wrap: wrap;
 
-    gap: 10px;
+    gap: 8px;
 
     padding-top: 10px;
 
@@ -494,15 +494,90 @@ body {
 
 .news-date {
     white-space: nowrap;
+
+    margin-left: auto;
 }
 
 
+/* =========================================================
+   عداد المشاهدات
+   ========================================================= */
+
 .news-views {
-    display: flex;
+    display: inline-flex;
 
     align-items: center;
+    justify-content: center;
 
     gap: 4px;
+
+    min-height: 34px;
+
+    padding:
+        6px
+        10px;
+
+    border:
+        1px solid
+        #dbeafe;
+
+    border-radius: 10px;
+
+    background: #eff6ff;
+
+    color: #1f2937;
+
+    font-size: 12px;
+    font-weight: 700;
+
+    white-space: nowrap;
+}
+
+
+.news-views strong {
+    font-size: 13px;
+    color: #111827;
+}
+
+
+/* =========================================================
+   عداد القراءات
+   ========================================================= */
+
+.news-reads {
+    display: inline-flex;
+
+    align-items: center;
+    justify-content: center;
+
+    gap: 4px;
+
+    min-height: 34px;
+
+    padding:
+        6px
+        10px;
+
+    border:
+        1px solid
+        #e5e7eb;
+
+    border-radius: 10px;
+
+    background: #f9fafb;
+
+    color: #1f2937;
+
+    font-size: 12px;
+    font-weight: 700;
+
+    white-space: nowrap;
+}
+
+
+.news-reads strong {
+    font-size: 13px;
+    color: #111827;
 }
 
 
@@ -691,6 +766,30 @@ body {
         font-size: 13px;
     }
 
+
+    .news-meta {
+        gap: 6px;
+    }
+
+
+    .news-views,
+    .news-reads {
+        font-size: 11px;
+
+        padding:
+            6px
+            8px;
+    }
+
+
+    .news-date {
+        width: 100%;
+
+        margin-left: 0;
+
+        margin-bottom: 2px;
+    }
+
 }
 
 
@@ -720,18 +819,10 @@ body {
     }
 
 
-    /* -----------------------------------------------------
-       البطاقة بشكل افتراضي تأخذ العرض كاملاً
-       ----------------------------------------------------- */
-
     .news-card {
         display: block;
     }
 
-
-    /* -----------------------------------------------------
-       فقط البطاقة التي تحتوي على صورة تصبح بعمودين
-       ----------------------------------------------------- */
 
     .news-card:has(.news-image) {
         display: grid;
