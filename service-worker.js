@@ -1,9 +1,10 @@
 /* =========================================================
-   نبض اليمن - Service Worker
+   نبض اليوم - Service Worker
    ========================================================= */
 
 const CACHE_NAME =
-    "nabd-yemen-v1";
+    "nabd-yemen-v2";
+
 
 const APP_FILES = [
     "./",
@@ -37,6 +38,7 @@ self.addEventListener(
                 )
 
         );
+
 
         /*
          * تفعيل النسخة الجديدة مباشرة.
@@ -81,6 +83,7 @@ self.addEventListener(
 
         );
 
+
         /*
          * التحكم بالصفحات المفتوحة مباشرة.
          */
@@ -108,18 +111,22 @@ self.addEventListener(
         if (
             request.method !== "GET"
         ) {
+
             return;
         }
 
 
         const url =
-            new URL(request.url);
+            new URL(
+                request.url
+            );
 
 
-        /*
-         * news.json يجب أن نحاول جلب أحدث
-         * نسخة منه من الإنترنت أولاً.
-         */
+        /* =================================================
+           news.json
+           دائماً الإنترنت أولاً
+           ================================================= */
+
         if (
             url.pathname.endsWith(
                 "/news.json"
@@ -128,7 +135,13 @@ self.addEventListener(
 
             event.respondWith(
 
-                fetch(request)
+                fetch(
+                    request,
+                    {
+                        cache: "no-store"
+                    }
+                )
+
                     .then(
                         response => {
 
@@ -154,8 +167,10 @@ self.addEventListener(
 
                         }
                     )
+
                     .catch(
                         () =>
+
                             caches.match(
                                 request
                             )
@@ -163,20 +178,88 @@ self.addEventListener(
 
             );
 
-            return;
 
+            return;
         }
 
 
-        /*
-         * ملفات التطبيق:
-         * نعرض الكاش أولاً،
-         * ثم الإنترنت عند الحاجة.
-         */
+        /* =================================================
+           app.js و style.css و index.html
+           الإنترنت أولاً
+           حتى تصل التحديثات مباشرة
+           ================================================= */
+
+        if (
+            url.pathname.endsWith("/app.js")
+            ||
+            url.pathname.endsWith("/style.css")
+            ||
+            url.pathname.endsWith("/index.html")
+            ||
+            url.pathname.endsWith("/")
+        ) {
+
+            event.respondWith(
+
+                fetch(
+                    request,
+                    {
+                        cache: "no-store"
+                    }
+                )
+
+                    .then(
+                        response => {
+
+                            const copy =
+                                response.clone();
+
+
+                            caches
+                                .open(CACHE_NAME)
+                                .then(
+                                    cache => {
+
+                                        cache.put(
+                                            request,
+                                            copy
+                                        );
+
+                                    }
+                                );
+
+
+                            return response;
+
+                        }
+                    )
+
+                    .catch(
+                        () =>
+
+                            caches.match(
+                                request
+                            )
+                    )
+
+            );
+
+
+            return;
+        }
+
+
+        /* =================================================
+           باقي الملفات
+           الكاش أولاً
+           ================================================= */
+
         event.respondWith(
 
             caches
-                .match(request)
+                .match(
+                    request
+                )
                 .then(
                     cachedResponse => {
 
@@ -185,14 +268,12 @@ self.addEventListener(
                         ) {
 
                             return cachedResponse;
-
                         }
 
 
                         return fetch(
                             request
                         );
-
                     }
                 )
 
