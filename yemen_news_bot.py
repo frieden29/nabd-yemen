@@ -13,22 +13,25 @@ from bs4 import BeautifulSoup
 
 
 # =========================================================
-# الإعدادات
+# نبض اليمن - الإعدادات
 # =========================================================
 
 OUTPUT_FILE = "news.json"
 
+# أقصى عدد نأخذه من المصدر في كل تشغيل
 MAX_PER_SOURCE = 20
 
+# أقصى عدد إجمالي للأخبار
 MAX_TOTAL_NEWS = 1000
 
+# مدة الاحتفاظ بالأخبار داخل نبض اليمن
 KEEP_DAYS = 3
 
 REQUEST_TIMEOUT = 15
 
 
 # =========================================================
-# كلمات واضحة تدل على أن الخبر متعلق باليمن
+# كلمات تدل على أن الخبر متعلق باليمن
 # =========================================================
 
 YEMEN_KEYWORDS = [
@@ -88,7 +91,7 @@ YEMEN_KEYWORDS = [
 
 
 # =========================================================
-# المصادر العامة التي نأخذ منها أخبار اليمن فقط
+# المصادر العامة التي نريد منها أخبار اليمن فقط
 # =========================================================
 
 YEMEN_ONLY_SOURCES = {
@@ -169,7 +172,7 @@ WEB_SOURCES = [
 
 
 # =========================================================
-# Headers
+# إعدادات الاتصال
 # =========================================================
 
 HEADERS = {
@@ -192,6 +195,21 @@ HEADERS = {
     "Accept-Language":
         "ar,en-US;q=0.8,en;q=0.6",
 }
+
+
+# =========================================================
+# وقت دخول الخبر إلى نبض اليمن
+#
+# مهم:
+# هذا ليس تاريخ المصدر.
+# هذا هو الوقت الذي اكتشف فيه البوت الخبر لأول مرة.
+# =========================================================
+
+def current_app_time():
+
+    return datetime.now(
+        timezone.utc
+    ).isoformat()
 
 
 # =========================================================
@@ -248,22 +266,10 @@ def normalize_arabic_text(text):
         .replace("أ", "ا")
         .replace("إ", "ا")
         .replace("آ", "ا")
-    )
-
-    text = (
-        text
         .replace("ى", "ي")
         .replace("ئ", "ي")
-    )
-
-    text = text.replace(
-        "ؤ",
-        "و"
-    )
-
-    text = text.replace(
-        "ـ",
-        ""
+        .replace("ؤ", "و")
+        .replace("ـ", "")
     )
 
     text = text.lower()
@@ -304,6 +310,7 @@ def is_yemen_related(
         if not normalized_keyword:
             continue
 
+        # الكلمات المركبة
         if " " in normalized_keyword:
 
             if normalized_keyword in text:
@@ -311,6 +318,7 @@ def is_yemen_related(
 
             continue
 
+        # كلمة عربية مستقلة
         pattern = (
             r"(?<![\u0600-\u06FF])"
             +
@@ -325,6 +333,7 @@ def is_yemen_related(
             pattern,
             text
         ):
+
             return True
 
     return False
@@ -339,9 +348,17 @@ def normalize_link(link):
     if not link:
         return ""
 
-    return str(
+    link = str(
         link
     ).strip()
+
+    # إزالة الجزء الذي يأتي بعد #
+    link = link.split(
+        "#",
+        1
+    )[0]
+
+    return link
 
 
 # =========================================================
@@ -372,50 +389,6 @@ def same_domain(
             "." + domain
         )
     )
-
-
-# =========================================================
-# تحويل التاريخ إلى UTC
-# =========================================================
-
-def normalize_datetime(value):
-
-    if not value:
-        return ""
-
-    try:
-
-        value = str(
-            value
-        ).strip()
-
-        if value.endswith("Z"):
-
-            value = (
-                value[:-1]
-                +
-                "+00:00"
-            )
-
-        dt = datetime.fromisoformat(
-            value
-        )
-
-        if dt.tzinfo is None:
-
-            dt = dt.replace(
-                tzinfo=timezone.utc
-            )
-
-        dt = dt.astimezone(
-            timezone.utc
-        )
-
-        return dt.isoformat()
-
-    except Exception:
-
-        return ""
 
 
 # =========================================================
@@ -521,88 +494,6 @@ def extract_image(entry):
 
 
 # =========================================================
-# استخراج التاريخ الحقيقي من RSS
-# =========================================================
-
-def parse_date(entry):
-
-    possible_dates = (
-
-        "published_parsed",
-        "updated_parsed",
-
-    )
-
-    for attr in possible_dates:
-
-        value = getattr(
-            entry,
-            attr,
-            None
-        )
-
-        if value:
-
-            try:
-
-                dt = datetime(
-                    *value[:6],
-                    tzinfo=timezone.utc
-                )
-
-                return dt.isoformat()
-
-            except Exception:
-
-                pass
-
-    # -----------------------------------------------------
-    # نحاول النص الأصلي للتاريخ
-    # -----------------------------------------------------
-
-    for attr in (
-        "published",
-        "updated"
-    ):
-
-        value = getattr(
-            entry,
-            attr,
-            None
-        )
-
-        if not value:
-            continue
-
-        try:
-
-            parsed = feedparser._parse_date(
-                value
-            )
-
-            if parsed:
-
-                dt = datetime(
-                    *parsed[:6],
-                    tzinfo=timezone.utc
-                )
-
-                return dt.isoformat()
-
-        except Exception:
-
-            pass
-
-    # -----------------------------------------------------
-    # مهم:
-    # لا نعطي الخبر الوقت الحالي
-    # إذا لم نجد تاريخاً حقيقياً
-    # -----------------------------------------------------
-
-    return ""
-
-
-# =========================================================
 # قراءة مصدر RSS
 # =========================================================
 
@@ -620,7 +511,7 @@ def fetch_source(source):
     print("=" * 70)
 
     print(
-        f"المصدر: {name}"
+        f"🇾🇪 المصدر: {name}"
     )
 
     print(
@@ -657,6 +548,8 @@ def fetch_source(source):
 
     items = []
 
+    # المصادر العامة:
+    # نقرأ عدداً أكبر حتى نجد أخبار اليمن.
     if yemen_only:
 
         entries = feed.entries[
@@ -720,22 +613,12 @@ def fetch_source(source):
             entry
         )
 
-        published_at = parse_date(
-            entry
-        )
-
         # -------------------------------------------------
-        # إذا لم يقدم RSS تاريخاً حقيقياً
-        # لا نخترع تاريخاً للخبر
+        # وقت نشر الخبر في نبض اليمن
+        #
+        # هذا الوقت لن يُعتمد إلا إذا كان الخبر جديداً.
+        # عند الدمج لاحقاً، الخبر القديم يحتفظ بوقته.
         # -------------------------------------------------
-
-        if not published_at:
-
-            print(
-                f"⚠️ لا يوجد تاريخ موثوق: {title}"
-            )
-
-            continue
 
         item = {
 
@@ -755,7 +638,7 @@ def fetch_source(source):
                 description,
 
             "published_at":
-                published_at,
+                current_app_time(),
 
             "views":
                 0,
@@ -774,14 +657,14 @@ def fetch_source(source):
             break
 
     print(
-        f"✅ تم استخراج {len(items)} خبراً من {name}"
+        f"✅ تم العثور على {len(items)} خبراً من {name}"
     )
 
     return items
 
 
 # =========================================================
-# استخراج صورة من HTML
+# استخراج الصورة من HTML
 # =========================================================
 
 def extract_html_image(
@@ -843,238 +726,7 @@ def extract_html_image(
 
 
 # =========================================================
-# البحث عن تاريخ النشر في JSON-LD
-# =========================================================
-
-def extract_json_ld_date(soup):
-
-    scripts = soup.find_all(
-        "script",
-        type="application/ld+json"
-    )
-
-    def search_object(obj):
-
-        if isinstance(
-            obj,
-            dict
-        ):
-
-            for key in (
-                "datePublished",
-                "dateCreated"
-            ):
-
-                if obj.get(key):
-
-                    result = normalize_datetime(
-                        obj.get(key)
-                    )
-
-                    if result:
-                        return result
-
-            for value in obj.values():
-
-                result = search_object(
-                    value
-                )
-
-                if result:
-                    return result
-
-        elif isinstance(
-            obj,
-            list
-        ):
-
-            for value in obj:
-
-                result = search_object(
-                    value
-                )
-
-                if result:
-                    return result
-
-        return ""
-
-    for script in scripts:
-
-        try:
-
-            data = json.loads(
-                script.string
-                or
-                script.get_text()
-            )
-
-            result = search_object(
-                data
-            )
-
-            if result:
-                return result
-
-        except Exception:
-
-            continue
-
-    return ""
-
-
-# =========================================================
-# استخراج تاريخ النشر من صفحة الخبر
-# =========================================================
-
-def extract_article_date(
-    article_url
-):
-
-    try:
-
-        response = requests.get(
-            article_url,
-            headers=HEADERS,
-            timeout=REQUEST_TIMEOUT,
-        )
-
-        response.raise_for_status()
-
-    except Exception as e:
-
-        print(
-            f"⚠️ تعذر فتح صفحة الخبر لمعرفة التاريخ: {e}"
-        )
-
-        return ""
-
-    soup = BeautifulSoup(
-        response.text,
-        "html.parser"
-    )
-
-    # -----------------------------------------------------
-    # 1. meta article:published_time
-    # -----------------------------------------------------
-
-    selectors = [
-
-        (
-            "meta",
-            {
-                "property":
-                    "article:published_time"
-            },
-            "content"
-        ),
-
-        (
-            "meta",
-            {
-                "name":
-                    "article:published_time"
-            },
-            "content"
-        ),
-
-        (
-            "meta",
-            {
-                "itemprop":
-                    "datePublished"
-            },
-            "content"
-        ),
-
-        (
-            "meta",
-            {
-                "name":
-                    "date"
-            },
-            "content"
-        ),
-
-        (
-            "meta",
-            {
-                "name":
-                    "pubdate"
-            },
-            "content"
-        ),
-
-    ]
-
-    for (
-        tag_name,
-        attrs,
-        attribute
-    ) in selectors:
-
-        tag = soup.find(
-            tag_name,
-            attrs=attrs
-        )
-
-        if (
-            tag
-            and
-            tag.get(attribute)
-        ):
-
-            result = normalize_datetime(
-                tag.get(attribute)
-            )
-
-            if result:
-                return result
-
-    # -----------------------------------------------------
-    # 2. عنصر time
-    # -----------------------------------------------------
-
-    time_tag = soup.find(
-        "time"
-    )
-
-    if time_tag:
-
-        value = (
-            time_tag.get(
-                "datetime"
-            )
-            or
-            time_tag.get_text(
-                " ",
-                strip=True
-            )
-        )
-
-        result = normalize_datetime(
-            value
-        )
-
-        if result:
-            return result
-
-    # -----------------------------------------------------
-    # 3. JSON-LD
-    # -----------------------------------------------------
-
-    result = extract_json_ld_date(
-        soup
-    )
-
-    if result:
-        return result
-
-    return ""
-
-
-# =========================================================
-# قراءة موقع إخباري مباشر
+# قراءة موقع مباشر
 # =========================================================
 
 def fetch_web_source(source):
@@ -1093,7 +745,7 @@ def fetch_web_source(source):
     print("=" * 70)
 
     print(
-        f"المصدر: {name}"
+        f"🇾🇪 المصدر: {name}"
     )
 
     print(
@@ -1178,9 +830,11 @@ def fetch_web_source(source):
         if len(title) < 15:
             continue
 
-        link = urljoin(
-            url,
-            href
+        link = normalize_link(
+            urljoin(
+                url,
+                href
+            )
         )
 
         if not same_domain(
@@ -1239,24 +893,10 @@ def fetch_web_source(source):
                 continue
 
         # -------------------------------------------------
-        # استخراج تاريخ النشر الحقيقي من صفحة الخبر
+        # لا نفتح صفحة الخبر لمعرفة تاريخ المصدر.
+        #
+        # ما يهمنا هو وقت دخوله إلى نبض اليمن.
         # -------------------------------------------------
-
-        published_at = extract_article_date(
-            link
-        )
-
-        if not published_at:
-
-            print(
-                f"⚠️ تم تجاهل خبر لعدم العثور على تاريخ نشر موثوق:"
-            )
-
-            print(
-                f"   {title}"
-            )
-
-            continue
 
         item = {
 
@@ -1276,7 +916,7 @@ def fetch_web_source(source):
                 description,
 
             "published_at":
-                published_at,
+                current_app_time(),
 
             "views":
                 0,
@@ -1294,12 +934,8 @@ def fetch_web_source(source):
 
             break
 
-        time.sleep(
-            0.2
-        )
-
     print(
-        f"✅ تم استخراج {len(items)} خبراً من {name}"
+        f"✅ تم العثور على {len(items)} خبراً من {name}"
     )
 
     return items
@@ -1332,6 +968,8 @@ def final_yemen_filter(news):
             ""
         )
 
+        # المصادر اليمنية المتخصصة
+        # نحتفظ بأخبارها كما هي.
         if source not in YEMEN_ONLY_SOURCES:
 
             result.append(
@@ -1340,6 +978,8 @@ def final_yemen_filter(news):
 
             continue
 
+        # المصادر العامة
+        # يجب أن يكون الخبر متعلقاً باليمن.
         if is_yemen_related(
             title,
             description
@@ -1354,20 +994,18 @@ def final_yemen_filter(news):
             removed += 1
 
             print(
-                f"🗑️ استبعاد خبر غير يمني من {source}: {title}"
+                f"🗑️ استبعاد خبر غير متعلق باليمن من {source}: {title}"
             )
 
-    print()
-
     print(
-        f"🧹 تم حذف {removed} خبراً غير متعلق باليمن"
+        f"🧹 تم استبعاد {removed} خبراً غير متعلق باليمن"
     )
 
     return result
 
 
 # =========================================================
-# قراءة الأخبار القديمة من news.json
+# تحميل news.json الحالي
 # =========================================================
 
 def load_existing_news():
@@ -1390,7 +1028,24 @@ def load_existing_news():
         ):
 
             print(
-                f"📚 تم تحميل {len(data)} خبراً محفوظاً"
+                f"📚 الأخبار الموجودة حالياً: {len(data)}"
+            )
+
+            return data
+
+        if (
+            isinstance(data, dict)
+            and
+            isinstance(
+                data.get("news"),
+                list
+            )
+        ):
+
+            data = data["news"]
+
+            print(
+                f"📚 الأخبار الموجودة حالياً: {len(data)}"
             )
 
             return data
@@ -1398,47 +1053,81 @@ def load_existing_news():
     except FileNotFoundError:
 
         print(
-            "📚 لا يوجد ملف أخبار سابق"
+            "📚 لا يوجد news.json سابق"
         )
 
     except Exception as e:
 
         print(
-            f"⚠️ تعذر قراءة الأخبار السابقة: {e}"
+            f"⚠️ تعذر قراءة news.json: {e}"
         )
 
     return []
 
 
 # =========================================================
-# إزالة التكرار مع الحفاظ على النسخة القديمة
+# إنشاء مفتاح للخبر
+# =========================================================
+
+def news_key(item):
+
+    link = normalize_link(
+        item.get(
+            "link",
+            ""
+        )
+    )
+
+    if link:
+
+        return (
+            "link:",
+            link
+        )
+
+    title = normalize_arabic_text(
+        item.get(
+            "title",
+            ""
+        )
+    )
+
+    return (
+        "title:",
+        title
+    )
+
+
+# =========================================================
+# دمج الأخبار القديمة والجديدة
 #
-# إذا كان الخبر موجوداً من قبل:
-# نحافظ على بياناته القديمة وخاصة تاريخ النشر.
+# النقطة الأهم:
+#
+# إذا كان الخبر موجوداً من قبل، نحتفظ بالنسخة القديمة
+# وبالتالي يبقى published_at كما كان عند دخوله لأول مرة.
+#
+# لا يتغير الوقت مع كل تشغيل.
 # =========================================================
 
 def merge_news(
     old_news,
-    new_news
+    fetched_news
 ):
 
     result = []
 
-    links = set()
+    existing_keys = set()
 
-    titles = set()
+    existing_titles = set()
 
     # -----------------------------------------------------
-    # الأخبار القديمة أولاً
+    # أولاً: الأخبار الموجودة في التطبيق
     # -----------------------------------------------------
 
     for item in old_news:
 
-        link = normalize_link(
-            item.get(
-                "link",
-                ""
-            )
+        key = news_key(
+            item
         )
 
         title = normalize_arabic_text(
@@ -1448,45 +1137,42 @@ def merge_news(
             )
         )
 
-        if (
-            link
-            and
-            link in links
-        ):
-
+        if key in existing_keys:
             continue
 
         if (
             title
             and
-            title in titles
+            title in existing_titles
         ):
-
             continue
 
-        if link:
-            links.add(link)
+        existing_keys.add(
+            key
+        )
 
         if title:
-            titles.add(title)
+
+            existing_titles.add(
+                title
+            )
 
         result.append(
             item
         )
 
     # -----------------------------------------------------
-    # إضافة الأخبار الجديدة فقط
+    # ثانياً: الأخبار التي وجدناها الآن
     # -----------------------------------------------------
 
     added = 0
 
-    for item in new_news:
+    repeated = 0
 
-        link = normalize_link(
-            item.get(
-                "link",
-                ""
-            )
+    for item in fetched_news:
+
+        key = news_key(
+            item
         )
 
         title = normalize_arabic_text(
@@ -1496,28 +1182,34 @@ def merge_news(
             )
         )
 
-        if (
-            link
-            and
-            link in links
-        ):
+        # الخبر موجود من قبل
+        if key in existing_keys:
 
+            repeated += 1
             continue
 
+        # حماية إضافية إذا تغيّر الرابط وبقي العنوان نفسه
         if (
             title
             and
-            title in titles
+            title in existing_titles
         ):
 
+            repeated += 1
             continue
 
-        if link:
-            links.add(link)
+        existing_keys.add(
+            key
+        )
 
         if title:
-            titles.add(title)
 
+            existing_titles.add(
+                title
+            )
+
+        # published_at هنا هو وقت اكتشاف الخبر
+        # لأول مرة في نبض اليمن.
         result.append(
             item
         )
@@ -1525,14 +1217,18 @@ def merge_news(
         added += 1
 
     print(
-        f"🆕 تمت إضافة {added} أخبار جديدة"
+        f"🆕 أخبار جديدة أضيفت إلى نبض اليمن: {added}"
+    )
+
+    print(
+        f"🔁 أخبار مكررة لم تتم إضافتها: {repeated}"
     )
 
     return result
 
 
 # =========================================================
-# تحويل published_at إلى datetime
+# قراءة وقت الخبر داخل نبض اليمن
 # =========================================================
 
 def get_news_datetime(item):
@@ -1549,10 +1245,17 @@ def get_news_datetime(item):
 
         value = str(
             value
-        ).replace(
-            "Z",
-            "+00:00"
-        )
+        ).strip()
+
+        if value.endswith(
+            "Z"
+        ):
+
+            value = (
+                value[:-1]
+                +
+                "+00:00"
+            )
 
         dt = datetime.fromisoformat(
             value
@@ -1574,7 +1277,10 @@ def get_news_datetime(item):
 
 
 # =========================================================
-# حذف الأخبار الأقدم من ثلاثة أيام
+# حذف الأخبار التي تجاوزت 3 أيام
+#
+# الثلاثة أيام تحسب من وقت دخول الخبر إلى نبض اليمن،
+# وليس من تاريخ نشره في المصدر.
 # =========================================================
 
 def remove_old_news(news):
@@ -1601,36 +1307,16 @@ def remove_old_news(news):
             item
         )
 
-        # -------------------------------------------------
-        # لا نحتفظ بخبر بلا تاريخ موثوق
-        # -------------------------------------------------
-
+        # خبر قديم لا يحتوي وقتاً صالحاً:
+        # نحذفه حتى لا يبقى إلى الأبد.
         if dt is None:
 
             removed += 1
-
             continue
 
         if dt < cutoff:
 
             removed += 1
-
-            continue
-
-        # -------------------------------------------------
-        # حماية من تاريخ مستقبلي غير منطقي
-        # -------------------------------------------------
-
-        if dt > (
-            now
-            +
-            timedelta(
-                hours=6
-            )
-        ):
-
-            removed += 1
-
             continue
 
         result.append(
@@ -1638,42 +1324,44 @@ def remove_old_news(news):
         )
 
     print(
-        f"🗑️ تم حذف {removed} خبراً أقدم من {KEEP_DAYS} أيام أو بتاريخ غير صالح"
+        f"🗑️ أخبار حُذفت لتجاوزها {KEEP_DAYS} أيام: {removed}"
     )
 
     return result
 
 
 # =========================================================
-# ترتيب الأخبار حسب تاريخ النشر الحقيقي
+# ترتيب الأخبار
+#
+# الأحدث في نبض اليمن أولاً
 # =========================================================
 
 def sort_news(news):
 
-    def key(item):
-
-        dt = get_news_datetime(
-            item
-        )
-
-        if dt is None:
-
-            return datetime.min.replace(
-                tzinfo=timezone.utc
-            )
-
-        return dt
+    minimum_date = datetime.min.replace(
+        tzinfo=timezone.utc
+    )
 
     news.sort(
-        key=key,
+
+        key=lambda item:
+            (
+                get_news_datetime(
+                    item
+                )
+                or
+                minimum_date
+            ),
+
         reverse=True
+
     )
 
     return news
 
 
 # =========================================================
-# تحديد الحد الأقصى 1000 خبر
+# الحد الأقصى 1000 خبر
 # =========================================================
 
 def limit_news(news):
@@ -1686,10 +1374,17 @@ def limit_news(news):
 
         return news
 
-    print(
-        f"✂️ تجاوز العدد {MAX_TOTAL_NEWS} خبر، سيتم الاحتفاظ بالأحدث فقط"
+    removed = (
+        len(news)
+        -
+        MAX_TOTAL_NEWS
     )
 
+    print(
+        f"✂️ تم حذف {removed} خبراً لتطبيق حد {MAX_TOTAL_NEWS} خبر"
+    )
+
+    # الأخبار مرتبة مسبقاً من الأحدث إلى الأقدم.
     return news[
         :MAX_TOTAL_NEWS
     ]
@@ -1719,14 +1414,14 @@ def save_news(news):
     print("=" * 70)
 
     print(
-        f"✅ تم حفظ {len(news)} خبراً في {OUTPUT_FILE}"
+        f"💾 تم حفظ {len(news)} خبراً في {OUTPUT_FILE}"
     )
 
     print("=" * 70)
 
 
 # =========================================================
-# التشغيل الرئيسي
+# البرنامج الرئيسي
 # =========================================================
 
 def main():
@@ -1743,17 +1438,17 @@ def main():
 
     print()
 
-    # =====================================================
-    # قراءة الأخبار المحفوظة أولاً
-    # =====================================================
+    # -----------------------------------------------------
+    # 1. قراءة الأخبار الموجودة
+    # -----------------------------------------------------
 
     old_news = load_existing_news()
 
-    new_news = []
+    # -----------------------------------------------------
+    # 2. جمع الأخبار الموجودة حالياً في المصادر
+    # -----------------------------------------------------
 
-    # =====================================================
-    # RSS
-    # =====================================================
+    fetched_news = []
 
     for source in SOURCES:
 
@@ -1761,17 +1456,13 @@ def main():
             source
         )
 
-        new_news.extend(
+        fetched_news.extend(
             items
         )
 
         time.sleep(
-            0.5
+            0.4
         )
-
-    # =====================================================
-    # المواقع المباشرة
-    # =====================================================
 
     for source in WEB_SOURCES:
 
@@ -1779,80 +1470,87 @@ def main():
             source
         )
 
-        new_news.extend(
+        fetched_news.extend(
             items
         )
 
         time.sleep(
-            0.5
+            0.4
         )
 
     print()
 
     print(
-        f"📥 تم جلب {len(new_news)} خبراً في هذه الدورة"
+        f"📥 الأخبار التي عُثر عليها في هذه الدورة: {len(fetched_news)}"
     )
 
-    # =====================================================
-    # فلترة أخبار اليمن
-    # =====================================================
+    # -----------------------------------------------------
+    # 3. فلترة اليمن
+    # -----------------------------------------------------
 
-    new_news = final_yemen_filter(
-        new_news
+    fetched_news = final_yemen_filter(
+        fetched_news
     )
 
     print(
-        f"🇾🇪 بعد الفلترة: {len(new_news)} خبراً"
+        f"🇾🇪 بعد فلترة اليمن: {len(fetched_news)}"
     )
 
-    # =====================================================
-    # دمج القديم مع الجديد ومنع التكرار
-    # =====================================================
+    # -----------------------------------------------------
+    # 4. دمج الجديد مع الموجود
+    #
+    # هنا يتم تثبيت وقت الخبر.
+    # الخبر الموجود لا يحصل على وقت جديد.
+    # -----------------------------------------------------
 
     all_news = merge_news(
         old_news,
-        new_news
+        fetched_news
     )
 
-    print(
-        f"🔁 العدد بعد الدمج ومنع التكرار: {len(all_news)}"
-    )
-
-    # =====================================================
-    # حذف ما تجاوز ثلاثة أيام
-    # =====================================================
+    # -----------------------------------------------------
+    # 5. حذف الأخبار التي تجاوزت 3 أيام
+    # -----------------------------------------------------
 
     all_news = remove_old_news(
         all_news
     )
 
-    # =====================================================
-    # ترتيب حسب تاريخ النشر الحقيقي
-    # =====================================================
+    # -----------------------------------------------------
+    # 6. ترتيبها حسب وقت دخولها إلى نبض اليمن
+    # -----------------------------------------------------
 
     all_news = sort_news(
         all_news
     )
 
-    # =====================================================
-    # الحد الأقصى 1000 خبر
-    # =====================================================
+    # -----------------------------------------------------
+    # 7. عدم تجاوز 1000 خبر
+    # -----------------------------------------------------
 
     all_news = limit_news(
         all_news
     )
 
-    # =====================================================
-    # الحفظ
-    # =====================================================
+    # -----------------------------------------------------
+    # 8. الحفظ
+    # -----------------------------------------------------
 
     save_news(
         all_news
     )
 
+    print()
+
+    print(
+        "✅ انتهى تحديث نبض اليمن بنجاح"
+    )
+
+    print()
+
 
 # =========================================================
-# بدء البرنامج
+# التشغيل
 # =========================================================
 
 if __name__ == "__main__":
