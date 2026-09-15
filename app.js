@@ -1094,24 +1094,25 @@ function createNewsCard(item) {
                 ${dateHtml}
 
 
-                <span class="news-views">
+               <span class="news-views">
 
-                    👁️ المشاهدات:
-                    <strong>
-                        ${articleViews.toLocaleString("ar")}
-                    </strong>
+            👁️ المشاهدات:
+             <strong>
+            ${articleViews.toLocaleString("ar")}
+             </strong>
 
-                </span>
+            </span>
 
 
-                <span class="news-reads">
+             <span class="news-reads">
 
-                    📖 القراءات:
-                    <strong>
-                        ${articleReads.toLocaleString("ar")}
-                    </strong>
+               📖 القراءات:
+              <strong>
+                ${articleReads.toLocaleString("ar")}
+               </strong>
 
-                </span>
+             </span>
+
 
             </div>
 
