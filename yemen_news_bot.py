@@ -3,7 +3,7 @@
 import json
 import re
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from html import unescape
 from urllib.parse import urljoin, urlparse
 
@@ -20,14 +20,15 @@ OUTPUT_FILE = "news.json"
 
 MAX_PER_SOURCE = 20
 
+MAX_TOTAL_NEWS = 1000
+
+KEEP_DAYS = 3
+
 REQUEST_TIMEOUT = 15
 
 
 # =========================================================
 # كلمات واضحة تدل على أن الخبر متعلق باليمن
-# ملاحظة:
-# لا نستخدم الكلمة العامة "يمن"
-# حتى لا نحصل على تطابقات خاطئة
 # =========================================================
 
 YEMEN_KEYWORDS = [
@@ -70,7 +71,6 @@ YEMEN_KEYWORDS = [
     "الحوثيين",
     "الحوثيون",
     "الحوثية",
-    "الحوثيين",
 
     "أنصار الله",
     "انصار الله",
@@ -84,12 +84,11 @@ YEMEN_KEYWORDS = [
 
     "القوات اليمنية",
     "الجيش اليمني",
-
 ]
 
 
 # =========================================================
-# المصادر العامة التي لا نريد منها إلا أخبار اليمن
+# المصادر العامة التي نأخذ منها أخبار اليمن فقط
 # =========================================================
 
 YEMEN_ONLY_SOURCES = {
@@ -106,10 +105,6 @@ YEMEN_ONLY_SOURCES = {
 # =========================================================
 
 SOURCES = [
-
-    # -----------------------------------------------------
-    # 🇾🇪 مصادر يمنية
-    # -----------------------------------------------------
 
     {
         "name": "المشهد اليمني",
@@ -141,12 +136,6 @@ SOURCES = [
         "yemen_only": False,
     },
 
-
-    # -----------------------------------------------------
-    # 🌍 مصادر عربية ودولية
-    # لا نأخذ منها إلا الأخبار المتعلقة باليمن
-    # -----------------------------------------------------
-
     {
         "name": "BBC عربي",
         "rss": "https://feeds.bbci.co.uk/arabic/rss.xml",
@@ -157,7 +146,7 @@ SOURCES = [
 
 
 # =========================================================
-# المصادر التي نقرأها مباشرة من الموقع
+# المواقع المباشرة
 # =========================================================
 
 WEB_SOURCES = [
@@ -197,14 +186,11 @@ HEADERS = {
         "text/html,"
         "application/xhtml+xml,"
         "application/xml;q=0.9,"
-        "image/avif,"
-        "image/webp,"
         "*/*;q=0.8"
     ),
 
     "Accept-Language":
         "ar,en-US;q=0.8,en;q=0.6",
-
 }
 
 
@@ -215,26 +201,21 @@ HEADERS = {
 def clean_text(text):
 
     if not text:
-
         return ""
-
 
     text = unescape(
         str(text)
     )
-
 
     soup = BeautifulSoup(
         text,
         "html.parser"
     )
 
-
     text = soup.get_text(
         " ",
         strip=True
     )
-
 
     text = re.sub(
         r"\s+",
@@ -242,37 +223,25 @@ def clean_text(text):
         text
     )
 
-
     return text.strip()
 
 
 # =========================================================
-# توحيد الحروف العربية
-# يساعد على مطابقة الكلمات بصورة أفضل
+# توحيد النص العربي
 # =========================================================
 
 def normalize_arabic_text(text):
 
     if not text:
-
         return ""
 
-
-    text = clean_text(
-        text
-    )
-
-
-    # إزالة التشكيل
+    text = clean_text(text)
 
     text = re.sub(
         r"[\u064B-\u065F\u0670]",
         "",
         text
     )
-
-
-    # توحيد أشكال الألف
 
     text = (
         text
@@ -281,38 +250,23 @@ def normalize_arabic_text(text):
         .replace("آ", "ا")
     )
 
-
-    # توحيد الياء والألف المقصورة
-
     text = (
         text
         .replace("ى", "ي")
         .replace("ئ", "ي")
     )
 
-
-    # توحيد الواو بالهمزة
-
     text = text.replace(
         "ؤ",
         "و"
     )
-
-
-    # إزالة التطويل
 
     text = text.replace(
         "ـ",
         ""
     )
 
-
-    # تحويل للحروف الصغيرة
-
     text = text.lower()
-
-
-    # توحيد المسافات
 
     text = re.sub(
         r"\s+",
@@ -320,12 +274,11 @@ def normalize_arabic_text(text):
         text
     )
 
-
     return text.strip()
 
 
 # =========================================================
-# فحص هل الخبر متعلق باليمن
+# هل الخبر متعلق باليمن؟
 # =========================================================
 
 def is_yemen_related(
@@ -337,11 +290,8 @@ def is_yemen_related(
         f"{title} {description}"
     )
 
-
     if not text:
-
         return False
-
 
     for keyword in YEMEN_KEYWORDS:
 
@@ -351,31 +301,15 @@ def is_yemen_related(
             )
         )
 
-
         if not normalized_keyword:
-
             continue
-
-
-        # -----------------------------------------------
-        # الكلمات المركبة مثل:
-        # باب المندب
-        # مجلس القيادة الرئاسي
-        # -----------------------------------------------
 
         if " " in normalized_keyword:
 
             if normalized_keyword in text:
-
                 return True
 
             continue
-
-
-        # -----------------------------------------------
-        # الكلمات المفردة:
-        # نبحث عنها ككلمة كاملة قدر الإمكان
-        # -----------------------------------------------
 
         pattern = (
             r"(?<![\u0600-\u06FF])"
@@ -387,14 +321,11 @@ def is_yemen_related(
             r"(?![\u0600-\u06FF])"
         )
 
-
         if re.search(
             pattern,
             text
         ):
-
             return True
-
 
     return False
 
@@ -406,9 +337,7 @@ def is_yemen_related(
 def normalize_link(link):
 
     if not link:
-
         return ""
-
 
     return str(
         link
@@ -430,26 +359,63 @@ def same_domain(
             link
         ).netloc.lower()
 
-
     except Exception:
 
         return False
 
-
     domain = domain.lower()
 
-
     return (
-
         host == domain
-
         or
-
         host.endswith(
             "." + domain
         )
-
     )
+
+
+# =========================================================
+# تحويل التاريخ إلى UTC
+# =========================================================
+
+def normalize_datetime(value):
+
+    if not value:
+        return ""
+
+    try:
+
+        value = str(
+            value
+        ).strip()
+
+        if value.endswith("Z"):
+
+            value = (
+                value[:-1]
+                +
+                "+00:00"
+            )
+
+        dt = datetime.fromisoformat(
+            value
+        )
+
+        if dt.tzinfo is None:
+
+            dt = dt.replace(
+                tzinfo=timezone.utc
+            )
+
+        dt = dt.astimezone(
+            timezone.utc
+        )
+
+        return dt.isoformat()
+
+    except Exception:
+
+        return ""
 
 
 # =========================================================
@@ -459,11 +425,6 @@ def same_domain(
 def extract_image(entry):
 
     candidates = []
-
-
-    # -----------------------------------------------------
-    # media_content
-    # -----------------------------------------------------
 
     if hasattr(
         entry,
@@ -476,17 +437,11 @@ def extract_image(entry):
                 "url"
             )
 
-
             if url:
 
                 candidates.append(
                     url
                 )
-
-
-    # -----------------------------------------------------
-    # media_thumbnail
-    # -----------------------------------------------------
 
     if hasattr(
         entry,
@@ -499,17 +454,11 @@ def extract_image(entry):
                 "url"
             )
 
-
             if url:
 
                 candidates.append(
                     url
                 )
-
-
-    # -----------------------------------------------------
-    # روابط من نوع صورة
-    # -----------------------------------------------------
 
     if hasattr(
         entry,
@@ -527,7 +476,6 @@ def extract_image(entry):
                 ""
             )
 
-
             if (
                 href
                 and
@@ -540,22 +488,15 @@ def extract_image(entry):
                     href
                 )
 
-
     if candidates:
 
         return candidates[0]
-
-
-    # -----------------------------------------------------
-    # محاولة استخراج صورة من الوصف
-    # -----------------------------------------------------
 
     summary = getattr(
         entry,
         "summary",
         ""
     )
-
 
     if summary:
 
@@ -564,11 +505,9 @@ def extract_image(entry):
             "html.parser"
         )
 
-
         img = soup.find(
             "img"
         )
-
 
         if (
             img
@@ -578,12 +517,11 @@ def extract_image(entry):
 
             return img["src"]
 
-
     return ""
 
 
 # =========================================================
-# استخراج التاريخ
+# استخراج التاريخ الحقيقي من RSS
 # =========================================================
 
 def parse_date(entry):
@@ -591,11 +529,9 @@ def parse_date(entry):
     possible_dates = (
 
         "published_parsed",
-
         "updated_parsed",
 
     )
-
 
     for attr in possible_dates:
 
@@ -604,7 +540,6 @@ def parse_date(entry):
             attr,
             None
         )
-
 
         if value:
 
@@ -615,18 +550,56 @@ def parse_date(entry):
                     tzinfo=timezone.utc
                 )
 
-
                 return dt.isoformat()
-
 
             except Exception:
 
                 pass
 
+    # -----------------------------------------------------
+    # نحاول النص الأصلي للتاريخ
+    # -----------------------------------------------------
 
-    return datetime.now(
-        timezone.utc
-    ).isoformat()
+    for attr in (
+        "published",
+        "updated"
+    ):
+
+        value = getattr(
+            entry,
+            attr,
+            None
+        )
+
+        if not value:
+            continue
+
+        try:
+
+            parsed = feedparser._parse_date(
+                value
+            )
+
+            if parsed:
+
+                dt = datetime(
+                    *parsed[:6],
+                    tzinfo=timezone.utc
+                )
+
+                return dt.isoformat()
+
+        except Exception:
+
+            pass
+
+    # -----------------------------------------------------
+    # مهم:
+    # لا نعطي الخبر الوقت الحالي
+    # إذا لم نجد تاريخاً حقيقياً
+    # -----------------------------------------------------
+
+    return ""
 
 
 # =========================================================
@@ -644,7 +617,6 @@ def fetch_source(source):
         False
     )
 
-
     print("=" * 70)
 
     print(
@@ -661,7 +633,6 @@ def fetch_source(source):
 
     print("=" * 70)
 
-
     try:
 
         response = requests.get(
@@ -670,9 +641,7 @@ def fetch_source(source):
             timeout=REQUEST_TIMEOUT,
         )
 
-
         response.raise_for_status()
-
 
     except Exception as e:
 
@@ -680,20 +649,13 @@ def fetch_source(source):
             f"❌ فشل الاتصال: {e}"
         )
 
-
         return []
-
 
     feed = feedparser.parse(
         response.content
     )
 
-
     items = []
-
-
-    # نقرأ عدداً أكبر قليلاً للمصادر العامة
-    # لأن كثيراً من الأخبار سيتم استبعادها
 
     if yemen_only:
 
@@ -707,7 +669,6 @@ def fetch_source(source):
             :MAX_PER_SOURCE
         ]
 
-
     for entry in entries:
 
         title = clean_text(
@@ -718,7 +679,6 @@ def fetch_source(source):
             )
         )
 
-
         link = normalize_link(
             getattr(
                 entry,
@@ -726,7 +686,6 @@ def fetch_source(source):
                 ""
             )
         )
-
 
         description = clean_text(
             getattr(
@@ -740,7 +699,6 @@ def fetch_source(source):
             )
         )
 
-
         if (
             not title
             or
@@ -748,12 +706,6 @@ def fetch_source(source):
         ):
 
             continue
-
-
-        # -------------------------------------------------
-        # المصادر العامة:
-        # لا نقبل الخبر إلا إذا كان متعلقاً باليمن
-        # -------------------------------------------------
 
         if yemen_only:
 
@@ -764,16 +716,26 @@ def fetch_source(source):
 
                 continue
 
-
         image = extract_image(
             entry
         )
-
 
         published_at = parse_date(
             entry
         )
 
+        # -------------------------------------------------
+        # إذا لم يقدم RSS تاريخاً حقيقياً
+        # لا نخترع تاريخاً للخبر
+        # -------------------------------------------------
+
+        if not published_at:
+
+            print(
+                f"⚠️ لا يوجد تاريخ موثوق: {title}"
+            )
+
+            continue
 
         item = {
 
@@ -797,14 +759,11 @@ def fetch_source(source):
 
             "views":
                 0,
-
         }
-
 
         items.append(
             item
         )
-
 
         if (
             len(items)
@@ -814,19 +773,9 @@ def fetch_source(source):
 
             break
 
-
-    if yemen_only:
-
-        print(
-            f"✅ تم استخراج {len(items)} خبراً متعلقاً باليمن"
-        )
-
-    else:
-
-        print(
-            f"✅ تم استخراج {len(items)} خبراً"
-        )
-
+    print(
+        f"✅ تم استخراج {len(items)} خبراً من {name}"
+    )
 
     return items
 
@@ -844,7 +793,6 @@ def extract_html_image(
         "img"
     )
 
-
     if (
         not img
         and
@@ -855,30 +803,18 @@ def extract_html_image(
             "img"
         )
 
-
     if not img:
-
         return ""
 
-
     image = (
-
         img.get("src")
-
         or
-
         img.get("data-src")
-
         or
-
         img.get("data-lazy-src")
-
         or
-
         ""
-
     )
-
 
     if not image:
 
@@ -886,7 +822,6 @@ def extract_html_image(
             "srcset",
             ""
         )
-
 
         if srcset:
 
@@ -897,7 +832,6 @@ def extract_html_image(
                 .split(" ")[0]
             )
 
-
     if image:
 
         return urljoin(
@@ -905,12 +839,242 @@ def extract_html_image(
             image
         )
 
+    return ""
+
+
+# =========================================================
+# البحث عن تاريخ النشر في JSON-LD
+# =========================================================
+
+def extract_json_ld_date(soup):
+
+    scripts = soup.find_all(
+        "script",
+        type="application/ld+json"
+    )
+
+    def search_object(obj):
+
+        if isinstance(
+            obj,
+            dict
+        ):
+
+            for key in (
+                "datePublished",
+                "dateCreated"
+            ):
+
+                if obj.get(key):
+
+                    result = normalize_datetime(
+                        obj.get(key)
+                    )
+
+                    if result:
+                        return result
+
+            for value in obj.values():
+
+                result = search_object(
+                    value
+                )
+
+                if result:
+                    return result
+
+        elif isinstance(
+            obj,
+            list
+        ):
+
+            for value in obj:
+
+                result = search_object(
+                    value
+                )
+
+                if result:
+                    return result
+
+        return ""
+
+    for script in scripts:
+
+        try:
+
+            data = json.loads(
+                script.string
+                or
+                script.get_text()
+            )
+
+            result = search_object(
+                data
+            )
+
+            if result:
+                return result
+
+        except Exception:
+
+            continue
 
     return ""
 
 
 # =========================================================
-# قراءة موقع إخباري مباشرة
+# استخراج تاريخ النشر من صفحة الخبر
+# =========================================================
+
+def extract_article_date(
+    article_url
+):
+
+    try:
+
+        response = requests.get(
+            article_url,
+            headers=HEADERS,
+            timeout=REQUEST_TIMEOUT,
+        )
+
+        response.raise_for_status()
+
+    except Exception as e:
+
+        print(
+            f"⚠️ تعذر فتح صفحة الخبر لمعرفة التاريخ: {e}"
+        )
+
+        return ""
+
+    soup = BeautifulSoup(
+        response.text,
+        "html.parser"
+    )
+
+    # -----------------------------------------------------
+    # 1. meta article:published_time
+    # -----------------------------------------------------
+
+    selectors = [
+
+        (
+            "meta",
+            {
+                "property":
+                    "article:published_time"
+            },
+            "content"
+        ),
+
+        (
+            "meta",
+            {
+                "name":
+                    "article:published_time"
+            },
+            "content"
+        ),
+
+        (
+            "meta",
+            {
+                "itemprop":
+                    "datePublished"
+            },
+            "content"
+        ),
+
+        (
+            "meta",
+            {
+                "name":
+                    "date"
+            },
+            "content"
+        ),
+
+        (
+            "meta",
+            {
+                "name":
+                    "pubdate"
+            },
+            "content"
+        ),
+
+    ]
+
+    for (
+        tag_name,
+        attrs,
+        attribute
+    ) in selectors:
+
+        tag = soup.find(
+            tag_name,
+            attrs=attrs
+        )
+
+        if (
+            tag
+            and
+            tag.get(attribute)
+        ):
+
+            result = normalize_datetime(
+                tag.get(attribute)
+            )
+
+            if result:
+                return result
+
+    # -----------------------------------------------------
+    # 2. عنصر time
+    # -----------------------------------------------------
+
+    time_tag = soup.find(
+        "time"
+    )
+
+    if time_tag:
+
+        value = (
+            time_tag.get(
+                "datetime"
+            )
+            or
+            time_tag.get_text(
+                " ",
+                strip=True
+            )
+        )
+
+        result = normalize_datetime(
+            value
+        )
+
+        if result:
+            return result
+
+    # -----------------------------------------------------
+    # 3. JSON-LD
+    # -----------------------------------------------------
+
+    result = extract_json_ld_date(
+        soup
+    )
+
+    if result:
+        return result
+
+    return ""
+
+
+# =========================================================
+# قراءة موقع إخباري مباشر
 # =========================================================
 
 def fetch_web_source(source):
@@ -925,7 +1089,6 @@ def fetch_web_source(source):
         "yemen_only",
         False
     )
-
 
     print("=" * 70)
 
@@ -943,7 +1106,6 @@ def fetch_web_source(source):
 
     print("=" * 70)
 
-
     try:
 
         response = requests.get(
@@ -952,9 +1114,7 @@ def fetch_web_source(source):
             timeout=REQUEST_TIMEOUT,
         )
 
-
         response.raise_for_status()
-
 
     except Exception as e:
 
@@ -962,38 +1122,28 @@ def fetch_web_source(source):
             f"❌ فشل الاتصال: {e}"
         )
 
-
         return []
-
 
     soup = BeautifulSoup(
         response.text,
         "html.parser"
     )
 
-
     items = []
 
     seen = set()
 
-
     selectors = [
 
         "h1 a",
-
         "h2 a",
-
         "h3 a",
-
         "h4 a",
-
         "article a",
 
     ]
 
-
     links = []
-
 
     for selector in selectors:
 
@@ -1002,7 +1152,6 @@ def fetch_web_source(source):
                 selector
             )
         )
-
 
     for anchor in links:
 
@@ -1013,12 +1162,10 @@ def fetch_web_source(source):
             )
         )
 
-
         href = anchor.get(
             "href",
             ""
         )
-
 
         if (
             not title
@@ -1028,21 +1175,13 @@ def fetch_web_source(source):
 
             continue
 
-
-        # تجاهل العناوين القصيرة
-
         if len(title) < 15:
-
             continue
-
 
         link = urljoin(
             url,
             href
         )
-
-
-        # يجب أن يكون الرابط من نفس الموقع
 
         if not same_domain(
             link,
@@ -1051,22 +1190,12 @@ def fetch_web_source(source):
 
             continue
 
-
-        # منع تكرار الرابط
-
         if link in seen:
-
             continue
-
 
         seen.add(
             link
         )
-
-
-        # -------------------------------------------------
-        # العنصر الحاوي للخبر
-        # -------------------------------------------------
 
         container = anchor.find_parent(
             [
@@ -1076,11 +1205,9 @@ def fetch_web_source(source):
             ]
         )
 
-
         image = ""
 
         description = ""
-
 
         if container:
 
@@ -1089,11 +1216,9 @@ def fetch_web_source(source):
                 url
             )
 
-
             paragraph = container.find(
                 "p"
             )
-
 
             if paragraph:
 
@@ -1104,11 +1229,6 @@ def fetch_web_source(source):
                     )
                 )
 
-
-        # -------------------------------------------------
-        # فلترة المصادر العامة
-        # -------------------------------------------------
-
         if yemen_only:
 
             if not is_yemen_related(
@@ -1118,6 +1238,25 @@ def fetch_web_source(source):
 
                 continue
 
+        # -------------------------------------------------
+        # استخراج تاريخ النشر الحقيقي من صفحة الخبر
+        # -------------------------------------------------
+
+        published_at = extract_article_date(
+            link
+        )
+
+        if not published_at:
+
+            print(
+                f"⚠️ تم تجاهل خبر لعدم العثور على تاريخ نشر موثوق:"
+            )
+
+            print(
+                f"   {title}"
+            )
+
+            continue
 
         item = {
 
@@ -1137,20 +1276,15 @@ def fetch_web_source(source):
                 description,
 
             "published_at":
-                datetime.now(
-                    timezone.utc
-                ).isoformat(),
+                published_at,
 
             "views":
                 0,
-
         }
-
 
         items.append(
             item
         )
-
 
         if (
             len(items)
@@ -1160,39 +1294,26 @@ def fetch_web_source(source):
 
             break
 
-
-    if yemen_only:
-
-        print(
-            f"✅ تم استخراج {len(items)} خبراً متعلقاً باليمن"
+        time.sleep(
+            0.2
         )
 
-    else:
-
-        print(
-            f"✅ تم استخراج {len(items)} خبراً"
-        )
-
+    print(
+        f"✅ تم استخراج {len(items)} خبراً من {name}"
+    )
 
     return items
 
 
 # =========================================================
-# فلترة نهائية
-#
-# هذه أهم طبقة حماية:
-# أي خبر قادم من مصدر عام
-# يجب أن يكون متعلقاً باليمن
-# حتى لو مر من مرحلة سابقة
+# فلترة نهائية لأخبار اليمن
 # =========================================================
 
 def final_yemen_filter(news):
 
     result = []
 
-
     removed = 0
-
 
     for item in news:
 
@@ -1201,23 +1322,15 @@ def final_yemen_filter(news):
             ""
         )
 
-
         title = item.get(
             "title",
             ""
         )
 
-
         description = item.get(
             "description",
             ""
         )
-
-
-        # -------------------------------------------------
-        # المصدر اليمني:
-        # نترك خبره كما هو
-        # -------------------------------------------------
 
         if source not in YEMEN_ONLY_SOURCES:
 
@@ -1226,12 +1339,6 @@ def final_yemen_filter(news):
             )
 
             continue
-
-
-        # -------------------------------------------------
-        # المصدر العام:
-        # لا بد أن يكون الخبر متعلقاً باليمن
-        # -------------------------------------------------
 
         if is_yemen_related(
             title,
@@ -1250,37 +1357,89 @@ def final_yemen_filter(news):
                 f"🗑️ استبعاد خبر غير يمني من {source}: {title}"
             )
 
-
     print()
 
     print(
-        f"🧹 الفلترة النهائية: تم حذف {removed} خبراً غير متعلق باليمن"
+        f"🧹 تم حذف {removed} خبراً غير متعلق باليمن"
     )
-
 
     return result
 
 
 # =========================================================
-# إزالة التكرار
+# قراءة الأخبار القديمة من news.json
 # =========================================================
 
-def remove_duplicates(news):
+def load_existing_news():
+
+    try:
+
+        with open(
+            OUTPUT_FILE,
+            "r",
+            encoding="utf-8"
+        ) as f:
+
+            data = json.load(
+                f
+            )
+
+        if isinstance(
+            data,
+            list
+        ):
+
+            print(
+                f"📚 تم تحميل {len(data)} خبراً محفوظاً"
+            )
+
+            return data
+
+    except FileNotFoundError:
+
+        print(
+            "📚 لا يوجد ملف أخبار سابق"
+        )
+
+    except Exception as e:
+
+        print(
+            f"⚠️ تعذر قراءة الأخبار السابقة: {e}"
+        )
+
+    return []
+
+
+# =========================================================
+# إزالة التكرار مع الحفاظ على النسخة القديمة
+#
+# إذا كان الخبر موجوداً من قبل:
+# نحافظ على بياناته القديمة وخاصة تاريخ النشر.
+# =========================================================
+
+def merge_news(
+    old_news,
+    new_news
+):
 
     result = []
 
-    seen_links = set()
+    links = set()
 
-    seen_titles = set()
+    titles = set()
 
+    # -----------------------------------------------------
+    # الأخبار القديمة أولاً
+    # -----------------------------------------------------
 
-    for item in news:
+    for item in old_news:
 
-        link = item.get(
-            "link",
-            ""
-        ).strip()
-
+        link = normalize_link(
+            item.get(
+                "link",
+                ""
+            )
+        )
 
         title = normalize_arabic_text(
             item.get(
@@ -1289,85 +1448,251 @@ def remove_duplicates(news):
             )
         )
 
-
         if (
             link
             and
-            link in seen_links
+            link in links
         ):
 
             continue
-
 
         if (
             title
             and
-            title in seen_titles
+            title in titles
         ):
 
             continue
 
-
         if link:
-
-            seen_links.add(
-                link
-            )
-
+            links.add(link)
 
         if title:
-
-            seen_titles.add(
-                title
-            )
-
+            titles.add(title)
 
         result.append(
             item
         )
 
+    # -----------------------------------------------------
+    # إضافة الأخبار الجديدة فقط
+    # -----------------------------------------------------
+
+    added = 0
+
+    for item in new_news:
+
+        link = normalize_link(
+            item.get(
+                "link",
+                ""
+            )
+        )
+
+        title = normalize_arabic_text(
+            item.get(
+                "title",
+                ""
+            )
+        )
+
+        if (
+            link
+            and
+            link in links
+        ):
+
+            continue
+
+        if (
+            title
+            and
+            title in titles
+        ):
+
+            continue
+
+        if link:
+            links.add(link)
+
+        if title:
+            titles.add(title)
+
+        result.append(
+            item
+        )
+
+        added += 1
+
+    print(
+        f"🆕 تمت إضافة {added} أخبار جديدة"
+    )
 
     return result
 
 
 # =========================================================
-# ترتيب الأخبار
+# تحويل published_at إلى datetime
+# =========================================================
+
+def get_news_datetime(item):
+
+    value = item.get(
+        "published_at",
+        ""
+    )
+
+    if not value:
+        return None
+
+    try:
+
+        value = str(
+            value
+        ).replace(
+            "Z",
+            "+00:00"
+        )
+
+        dt = datetime.fromisoformat(
+            value
+        )
+
+        if dt.tzinfo is None:
+
+            dt = dt.replace(
+                tzinfo=timezone.utc
+            )
+
+        return dt.astimezone(
+            timezone.utc
+        )
+
+    except Exception:
+
+        return None
+
+
+# =========================================================
+# حذف الأخبار الأقدم من ثلاثة أيام
+# =========================================================
+
+def remove_old_news(news):
+
+    now = datetime.now(
+        timezone.utc
+    )
+
+    cutoff = (
+        now
+        -
+        timedelta(
+            days=KEEP_DAYS
+        )
+    )
+
+    result = []
+
+    removed = 0
+
+    for item in news:
+
+        dt = get_news_datetime(
+            item
+        )
+
+        # -------------------------------------------------
+        # لا نحتفظ بخبر بلا تاريخ موثوق
+        # -------------------------------------------------
+
+        if dt is None:
+
+            removed += 1
+
+            continue
+
+        if dt < cutoff:
+
+            removed += 1
+
+            continue
+
+        # -------------------------------------------------
+        # حماية من تاريخ مستقبلي غير منطقي
+        # -------------------------------------------------
+
+        if dt > (
+            now
+            +
+            timedelta(
+                hours=6
+            )
+        ):
+
+            removed += 1
+
+            continue
+
+        result.append(
+            item
+        )
+
+    print(
+        f"🗑️ تم حذف {removed} خبراً أقدم من {KEEP_DAYS} أيام أو بتاريخ غير صالح"
+    )
+
+    return result
+
+
+# =========================================================
+# ترتيب الأخبار حسب تاريخ النشر الحقيقي
 # =========================================================
 
 def sort_news(news):
 
     def key(item):
 
-        value = item.get(
-            "published_at",
-            ""
+        dt = get_news_datetime(
+            item
         )
 
-
-        try:
-
-            return datetime.fromisoformat(
-                value.replace(
-                    "Z",
-                    "+00:00"
-                )
-            )
-
-
-        except Exception:
+        if dt is None:
 
             return datetime.min.replace(
                 tzinfo=timezone.utc
             )
 
+        return dt
 
     news.sort(
         key=key,
         reverse=True
     )
 
-
     return news
+
+
+# =========================================================
+# تحديد الحد الأقصى 1000 خبر
+# =========================================================
+
+def limit_news(news):
+
+    if (
+        len(news)
+        <=
+        MAX_TOTAL_NEWS
+    ):
+
+        return news
+
+    print(
+        f"✂️ تجاوز العدد {MAX_TOTAL_NEWS} خبر، سيتم الاحتفاظ بالأحدث فقط"
+    )
+
+    return news[
+        :MAX_TOTAL_NEWS
+    ]
 
 
 # =========================================================
@@ -1389,7 +1714,6 @@ def save_news(news):
             indent=2
         )
 
-
     print()
 
     print("=" * 70)
@@ -1407,21 +1731,25 @@ def save_news(news):
 
 def main():
 
-    all_news = []
-
-
     print()
 
     print("=" * 70)
 
     print(
-        "🇾🇪 نبض اليوم - جلب أخبار اليمن"
+        "🇾🇪 نبض اليمن - جلب أخبار اليمن"
     )
 
     print("=" * 70)
 
     print()
 
+    # =====================================================
+    # قراءة الأخبار المحفوظة أولاً
+    # =====================================================
+
+    old_news = load_existing_news()
+
+    new_news = []
 
     # =====================================================
     # RSS
@@ -1433,16 +1761,13 @@ def main():
             source
         )
 
-
-        all_news.extend(
+        new_news.extend(
             items
         )
-
 
         time.sleep(
             0.5
         )
-
 
     # =====================================================
     # المواقع المباشرة
@@ -1454,60 +1779,68 @@ def main():
             source
         )
 
-
-        all_news.extend(
+        new_news.extend(
             items
         )
-
 
         time.sleep(
             0.5
         )
 
-
     print()
 
     print(
-        f"📥 العدد قبل الفلترة النهائية: {len(all_news)}"
+        f"📥 تم جلب {len(new_news)} خبراً في هذه الدورة"
     )
 
+    # =====================================================
+    # فلترة أخبار اليمن
+    # =====================================================
+
+    new_news = final_yemen_filter(
+        new_news
+    )
+
+    print(
+        f"🇾🇪 بعد الفلترة: {len(new_news)} خبراً"
+    )
 
     # =====================================================
-    # فلترة نهائية للمصادر العامة
+    # دمج القديم مع الجديد ومنع التكرار
     # =====================================================
 
-    all_news = final_yemen_filter(
+    all_news = merge_news(
+        old_news,
+        new_news
+    )
+
+    print(
+        f"🔁 العدد بعد الدمج ومنع التكرار: {len(all_news)}"
+    )
+
+    # =====================================================
+    # حذف ما تجاوز ثلاثة أيام
+    # =====================================================
+
+    all_news = remove_old_news(
         all_news
     )
 
-
-    print(
-        f"🇾🇪 العدد بعد فلترة أخبار اليمن: {len(all_news)}"
-    )
-
-
     # =====================================================
-    # إزالة الأخبار المكررة
-    # =====================================================
-
-    all_news = remove_duplicates(
-        all_news
-    )
-
-
-    print(
-        f"🔁 العدد بعد إزالة التكرار: {len(all_news)}"
-    )
-
-
-    # =====================================================
-    # ترتيب الأحدث أولاً
+    # ترتيب حسب تاريخ النشر الحقيقي
     # =====================================================
 
     all_news = sort_news(
         all_news
     )
 
+    # =====================================================
+    # الحد الأقصى 1000 خبر
+    # =====================================================
+
+    all_news = limit_news(
+        all_news
+    )
 
     # =====================================================
     # الحفظ
