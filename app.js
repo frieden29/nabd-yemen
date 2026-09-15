@@ -1,5 +1,5 @@
 /* =========================================================
-   نبض اليوم - app.js
+   نبض اليمن - app.js
    ========================================================= */
 
 
@@ -85,12 +85,18 @@ const SORT_KEY =
 const VISITOR_KEY =
     "nabd-yemen-visitor-counted";
 
-const ARTICLE_VIEW_SESSION_KEY =
+/*
+ * الأخبار التي شاهدها هذا المتصفح.
+ *
+ * نستخدم localStorage وليس sessionStorage،
+ * حتى لا تزيد مشاهدة الخبر عند إغلاق التطبيق
+ * وفتحه مرة أخرى من الجهاز نفسه.
+ */
+const ARTICLE_VIEW_KEY =
     "nabd-yemen-viewed-articles";
 
 /*
  * الأخبار التي سبق لهذا الجهاز قراءتها.
- * تبقى محفوظة حتى بعد إغلاق التطبيق.
  */
 const ARTICLE_READ_KEY =
     "nabd-yemen-read-articles";
@@ -109,6 +115,11 @@ let currentSort =
 let isLoading = false;
 
 let articleStats = {};
+
+/*
+ * مراقب ظهور الأخبار على الشاشة.
+ */
+let articleObserver = null;
 
 
 /* =========================================================
@@ -507,7 +518,8 @@ async function incrementCounter(path) {
 async function registerAppVisit() {
 
     /*
-     * كل فتح للتطبيق = مشاهدة عامة.
+     * نحتفظ بهذا العداد في Firebase
+     * حتى لو لم يعد ظاهراً في أعلى الصفحة.
      */
     await incrementCounter(
         "stats/views"
@@ -515,8 +527,7 @@ async function registerAppVisit() {
 
 
     /*
-     * الزائر يحسب مرة واحدة
-     * لكل متصفح/جهاز.
+     * الزائر يحسب مرة واحدة لكل متصفح/جهاز.
      */
     if (
         !localStorage.getItem(
@@ -636,7 +647,7 @@ function listenToArticleStats() {
 
 
 /* =========================================================
-   الأخبار التي شوهدت في الجلسة
+   الأخبار التي سبق لهذا الجهاز مشاهدتها
    ========================================================= */
 
 function getViewedArticles() {
@@ -644,8 +655,8 @@ function getViewedArticles() {
     try {
 
         const value =
-            sessionStorage.getItem(
-                ARTICLE_VIEW_SESSION_KEY
+            localStorage.getItem(
+                ARTICLE_VIEW_KEY
             );
 
 
@@ -681,15 +692,15 @@ function getViewedArticles() {
 
 
 /* =========================================================
-   حفظ الأخبار المشاهدة في الجلسة
+   حفظ الأخبار التي شاهدها الجهاز
    ========================================================= */
 
 function saveViewedArticles(set) {
 
     try {
 
-        sessionStorage.setItem(
-            ARTICLE_VIEW_SESSION_KEY,
+        localStorage.setItem(
+            ARTICLE_VIEW_KEY,
             JSON.stringify(
                 [...set]
             )
@@ -708,60 +719,151 @@ function saveViewedArticles(set) {
 
 
 /* =========================================================
-   تسجيل مشاهدة الأخبار
+   تسجيل مشاهدة خبر واحد
    ========================================================= */
 
-async function registerArticleViews(news) {
+async function registerArticleView(item) {
 
-    const viewed =
+    const articleId =
+        getArticleId(item);
+
+
+    const viewedArticles =
         getViewedArticles();
 
 
-    const promises = [];
-
-
-    for (const item of news) {
-
-        const articleId =
-            getArticleId(item);
-
-
-        if (
-            viewed.has(
-                articleId
-            )
-        ) {
-
-            continue;
-        }
-
-
-        viewed.add(
+    /*
+     * إذا سبق لهذا المتصفح مشاهدة الخبر،
+     * فلا نزيد العداد مرة أخرى.
+     */
+    if (
+        viewedArticles.has(
             articleId
-        );
+        )
+    ) {
 
-
-        promises.push(
-
-            incrementCounter(
-                `articles/${articleId}/views`
-            )
-
-        );
+        return;
     }
 
 
-    saveViewedArticles(
-        viewed
+    /*
+     * نسجله محلياً أولاً لمنع التكرار.
+     */
+    viewedArticles.add(
+        articleId
     );
 
 
-    if (
-        promises.length > 0
-    ) {
+    saveViewedArticles(
+        viewedArticles
+    );
 
-        await Promise.all(
-            promises
+
+    await incrementCounter(
+        `articles/${articleId}/views`
+    );
+}
+
+
+/* =========================================================
+   إنشاء مراقب ظهور الأخبار
+   ========================================================= */
+
+function createArticleObserver() {
+
+    /*
+     * إيقاف المراقب القديم عند إعادة رسم الأخبار.
+     */
+    if (articleObserver) {
+
+        articleObserver.disconnect();
+    }
+
+
+    articleObserver =
+        new IntersectionObserver(
+
+            entries => {
+
+                for (const entry of entries) {
+
+                    /*
+                     * لا نحسب المشاهدة إلا إذا ظهر
+                     * 50% على الأقل من بطاقة الخبر.
+                     */
+                    if (
+                        !entry.isIntersecting
+                        ||
+                        entry.intersectionRatio < 0.5
+                    ) {
+
+                        continue;
+                    }
+
+
+                    const article =
+                        entry.target;
+
+
+                    const item =
+                        article._newsItem;
+
+
+                    if (!item) {
+
+                        articleObserver.unobserve(
+                            article
+                        );
+
+                        continue;
+                    }
+
+
+                    /*
+                     * بعد ظهور الخبر نحاول تسجيل
+                     * المشاهدة مرة واحدة.
+                     */
+                    registerArticleView(
+                        item
+                    );
+
+
+                    /*
+                     * لا حاجة إلى مراقبة هذه البطاقة
+                     * مرة أخرى خلال هذا العرض.
+                     */
+                    articleObserver.unobserve(
+                        article
+                    );
+                }
+            },
+
+            {
+                threshold: 0.5
+            }
+        );
+}
+
+
+/* =========================================================
+   مراقبة البطاقات الموجودة حالياً
+   ========================================================= */
+
+function observeNewsCards() {
+
+    createArticleObserver();
+
+
+    const cards =
+        newsList.querySelectorAll(
+            ".news-card"
+        );
+
+
+    for (const card of cards) {
+
+        articleObserver.observe(
+            card
         );
     }
 }
@@ -854,10 +956,6 @@ async function registerArticleRead(item) {
         getReadArticles();
 
 
-    /*
-     * إذا سبق لهذا الجهاز قراءة الخبر
-     * لا نزيد العداد مرة ثانية.
-     */
     if (
         readArticles.has(
             articleId
@@ -868,10 +966,6 @@ async function registerArticleRead(item) {
     }
 
 
-    /*
-     * نحفظ الخبر أولاً حتى لا تؤدي
-     * الضغطة السريعة المتكررة إلى زيادة العداد.
-     */
     readArticles.add(
         articleId
     );
@@ -882,11 +976,6 @@ async function registerArticleRead(item) {
     );
 
 
-    /*
-     * زيادة:
-     * 1- القراءات العامة
-     * 2- قراءات هذا الخبر
-     */
     await Promise.all([
 
         incrementCounter(
@@ -1018,6 +1107,14 @@ function createNewsCard(item) {
         "news-card";
 
 
+    /*
+     * نربط الخبر ببطاقته حتى يعرف
+     * IntersectionObserver أي خبر ظهر.
+     */
+    article._newsItem =
+        item;
+
+
     let imageHtml = "";
 
 
@@ -1094,25 +1191,24 @@ function createNewsCard(item) {
                 ${dateHtml}
 
 
-               <span class="news-views">
+                <span class="news-views">
 
-            👁️ المشاهدات:
-             <strong>
-            ${articleViews.toLocaleString("ar")}
-             </strong>
+                    👁️ المشاهدات:
+                    <strong>
+                        ${articleViews.toLocaleString("ar")}
+                    </strong>
 
-            </span>
+                </span>
 
 
-             <span class="news-reads">
+                <span class="news-reads">
 
-               📖 القراءات:
-              <strong>
-                ${articleReads.toLocaleString("ar")}
-               </strong>
+                    📖 القراءات:
+                    <strong>
+                        ${articleReads.toLocaleString("ar")}
+                    </strong>
 
-             </span>
-
+                </span>
 
             </div>
 
@@ -1206,6 +1302,15 @@ function createNewsCard(item) {
 
 function renderNews() {
 
+    /*
+     * إيقاف المراقب قبل إزالة البطاقات القديمة.
+     */
+    if (articleObserver) {
+
+        articleObserver.disconnect();
+    }
+
+
     newsList.innerHTML = "";
 
 
@@ -1253,6 +1358,13 @@ function renderNews() {
 
 
     updateSortButtons();
+
+
+    /*
+     * بعد وضع البطاقات في الصفحة
+     * نبدأ مراقبة ما يظهر فعلياً للمستخدم.
+     */
+    observeNewsCards();
 }
 
 
@@ -1613,12 +1725,13 @@ async function loadNews(
         );
 
 
+        /*
+         * فقط نعرض الأخبار.
+         *
+         * لم نعد نستدعي registerArticleViews(allNews)
+         * لأن ذلك كان يحسب جميع الأخبار كمشاهدة.
+         */
         renderNews();
-
-
-        await registerArticleViews(
-            allNews
-        );
 
     }
 
